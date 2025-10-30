@@ -91,6 +91,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/organizations/:orgId/students/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const student = await storage.getStudent(id, orgId);
+      if (!student) {
+        return res.status(404).json({ message: "Student not found" });
+      }
+      res.json(student);
+    } catch (error) {
+      console.error("Error fetching student:", error);
+      res.status(500).json({ message: "Failed to fetch student" });
+    }
+  });
+
   app.post("/api/organizations/:orgId/students", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId } = req.params;
@@ -151,6 +165,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting behavior log:", error);
       res.status(500).json({ message: "Failed to delete behavior log" });
+    }
+  });
+
+  // Meeting notes routes
+  app.get("/api/organizations/:orgId/students/:studentId/meeting-notes", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const notes = await storage.getMeetingNotes(studentId, orgId);
+      res.json(notes);
+    } catch (error) {
+      console.error("Error fetching meeting notes:", error);
+      res.status(500).json({ message: "Failed to fetch meeting notes" });
+    }
+  });
+
+  // Follow-ups routes
+  app.get("/api/organizations/:orgId/students/:studentId/follow-ups", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const followUps = await storage.getFollowUps(studentId, orgId);
+      res.json(followUps);
+    } catch (error) {
+      console.error("Error fetching follow-ups:", error);
+      res.status(500).json({ message: "Failed to fetch follow-ups" });
     }
   });
 
