@@ -5,73 +5,37 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search } from "lucide-react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import type { Student } from "@shared/schema";
 
 export default function Students() {
   const [, setLocation] = useLocation();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const { user } = useAuth();
 
-  // todo: remove mock functionality
-  const students = [
-    {
-      id: "1",
-      name: "Sarah Johnson",
-      email: "sarah.johnson@school.edu",
-      class: "Grade 10A",
-      gender: "female",
-      logsCount: 5,
-      lastActivity: "2 days ago",
-    },
-    {
-      id: "2",
-      name: "Michael Chen",
-      email: "michael.chen@school.edu",
-      class: "Grade 10A",
-      gender: "male",
-      logsCount: 3,
-      lastActivity: "5 days ago",
-    },
-    {
-      id: "3",
-      name: "Emma Davis",
-      email: "emma.davis@school.edu",
-      class: "Grade 9B",
-      gender: "female",
-      logsCount: 8,
-      lastActivity: "1 day ago",
-    },
-    {
-      id: "4",
-      name: "James Wilson",
-      email: "james.wilson@school.edu",
-      class: "Grade 11C",
-      gender: "male",
-      logsCount: 2,
-      lastActivity: "1 week ago",
-    },
-    {
-      id: "5",
-      name: "Olivia Martinez",
-      email: "olivia.martinez@school.edu",
-      class: "Grade 10B",
-      gender: "female",
-      logsCount: 6,
-      lastActivity: "3 days ago",
-    },
-    {
-      id: "6",
-      name: "Ethan Brown",
-      email: "ethan.brown@school.edu",
-      class: "Grade 9A",
-      gender: "male",
-      logsCount: 4,
-      lastActivity: "4 days ago",
-    },
-  ];
+  const orgId = user?.organizations?.[0]?.id;
+
+  const { data: students = [], isLoading } = useQuery<Student[]>({
+    queryKey: ["/api/organizations", orgId, "students"],
+    enabled: !!orgId,
+  });
 
   const filteredStudents = students.filter((student) =>
     student.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading students...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -101,21 +65,43 @@ export default function Students() {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredStudents.map((student) => (
-          <StudentCard
-            key={student.id}
-            {...student}
-            onClick={() => setLocation(`/students/${student.id}`)}
-          />
-        ))}
-      </div>
+      {filteredStudents.length === 0 && searchQuery === "" ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground mb-4">No students yet. Add your first student to get started.</p>
+          <Button onClick={() => setIsAddDialogOpen(true)} data-testid="button-add-first-student">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Student
+          </Button>
+        </div>
+      ) : filteredStudents.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">No students found matching "{searchQuery}"</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredStudents.map((student) => (
+            <StudentCard
+              key={student.id}
+              id={student.id}
+              name={student.name}
+              email={student.email ?? ""}
+              class={student.class ?? ""}
+              gender={student.gender ?? ""}
+              logsCount={0}
+              lastActivity=""
+              onClick={() => setLocation(`/students/${student.id}`)}
+            />
+          ))}
+        </div>
+      )}
 
-      <AddStudentDialog
-        open={isAddDialogOpen}
-        onOpenChange={setIsAddDialogOpen}
-        onSubmit={(data) => console.log("New student:", data)}
-      />
+      {orgId && (
+        <AddStudentDialog
+          open={isAddDialogOpen}
+          onOpenChange={setIsAddDialogOpen}
+          organizationId={orgId}
+        />
+      )}
     </div>
   );
 }

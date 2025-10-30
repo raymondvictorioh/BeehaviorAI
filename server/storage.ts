@@ -24,6 +24,13 @@ import {
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
 
+export interface DashboardStats {
+  totalStudents: number;
+  totalBehaviorLogs: number;
+  pendingFollowUps: number;
+  positiveLogsPercentage: number;
+}
+
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
@@ -33,6 +40,7 @@ export interface IStorage {
   createOrganization(org: InsertOrganization): Promise<Organization>;
   getOrganization(id: string): Promise<Organization | undefined>;
   getUserOrganizations(userId: string): Promise<Organization[]>;
+  getDashboardStats(organizationId: string): Promise<DashboardStats>;
   
   // Organization User operations
   addUserToOrganization(data: InsertOrganizationUser): Promise<OrganizationUser>;
@@ -47,6 +55,7 @@ export interface IStorage {
   
   // Behavior Log operations
   getBehaviorLogs(studentId: string, organizationId: string): Promise<BehaviorLog[]>;
+  getAllBehaviorLogs(organizationId: string): Promise<BehaviorLog[]>;
   getBehaviorLog(id: string, organizationId: string): Promise<BehaviorLog | undefined>;
   createBehaviorLog(log: InsertBehaviorLog): Promise<BehaviorLog>;
   updateBehaviorLog(id: string, organizationId: string, log: Partial<InsertBehaviorLog>): Promise<BehaviorLog>;
@@ -58,6 +67,7 @@ export interface IStorage {
   
   // Follow-up operations
   getFollowUps(studentId: string, organizationId: string): Promise<FollowUp[]>;
+  getAllFollowUps(organizationId: string): Promise<FollowUp[]>;
   createFollowUp(followUp: InsertFollowUp): Promise<FollowUp>;
   updateFollowUp(id: string, organizationId: string, followUp: Partial<InsertFollowUp>): Promise<FollowUp>;
 }
@@ -115,6 +125,28 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(organizations, eq(organizationUsers.organizationId, organizations.id))
       .where(eq(organizationUsers.userId, userId));
     return orgs;
+  }
+
+  async getDashboardStats(organizationId: string): Promise<DashboardStats> {
+    const studentsData = await db.select().from(students).where(eq(students.organizationId, organizationId));
+    const behaviorLogsData = await db.select().from(behaviorLogs).where(eq(behaviorLogs.organizationId, organizationId));
+    const followUpsData = await db.select().from(followUps).where(eq(followUps.organizationId, organizationId));
+
+    const totalStudents = studentsData.length;
+    const totalBehaviorLogs = behaviorLogsData.length;
+    const pendingFollowUps = followUpsData.filter(fu => fu.completed === "false").length;
+    
+    const positiveLogs = behaviorLogsData.filter(log => log.category === "positive").length;
+    const positiveLogsPercentage = totalBehaviorLogs > 0 
+      ? Math.round((positiveLogs / totalBehaviorLogs) * 100) 
+      : 0;
+
+    return {
+      totalStudents,
+      totalBehaviorLogs,
+      pendingFollowUps,
+      positiveLogsPercentage,
+    };
   }
 
   // Organization User operations
@@ -178,6 +210,10 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(behaviorLogs.studentId, studentId), eq(behaviorLogs.organizationId, organizationId)));
   }
 
+  async getAllBehaviorLogs(organizationId: string): Promise<BehaviorLog[]> {
+    return db.select().from(behaviorLogs).where(eq(behaviorLogs.organizationId, organizationId));
+  }
+
   async getBehaviorLog(id: string, organizationId: string): Promise<BehaviorLog | undefined> {
     const [log] = await db
       .select()
@@ -223,6 +259,10 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(followUps)
       .where(and(eq(followUps.studentId, studentId), eq(followUps.organizationId, organizationId)));
+  }
+
+  async getAllFollowUps(organizationId: string): Promise<FollowUp[]> {
+    return db.select().from(followUps).where(eq(followUps.organizationId, organizationId));
   }
 
   async createFollowUp(followUp: InsertFollowUp): Promise<FollowUp> {

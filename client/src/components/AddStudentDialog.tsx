@@ -17,37 +17,68 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface AddStudentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit?: (data: {
-    name: string;
-    email: string;
-    class: string;
-    gender: string;
-  }) => void;
+  organizationId: string;
 }
 
 export function AddStudentDialog({
   open,
   onOpenChange,
-  onSubmit,
+  organizationId,
 }: AddStudentDialogProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [studentClass, setStudentClass] = useState("");
   const [gender, setGender] = useState("");
+  const { toast } = useToast();
+
+  const createStudent = useMutation({
+    mutationFn: async (data: {
+      name: string;
+      email: string;
+      class: string;
+      gender: string;
+    }) => {
+      const response = await fetch(`/api/organizations/${organizationId}/students`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to create student");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", organizationId, "students"] });
+      toast({
+        title: "Student added",
+        description: "The student has been successfully added.",
+      });
+      setName("");
+      setEmail("");
+      setStudentClass("");
+      setGender("");
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add student. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Adding student:", { name, email, class: studentClass, gender });
-    onSubmit?.({ name, email, class: studentClass, gender });
-    setName("");
-    setEmail("");
-    setStudentClass("");
-    setGender("");
-    onOpenChange(false);
+    createStudent.mutate({ name, email, class: studentClass, gender });
   };
 
   return (
@@ -119,8 +150,12 @@ export function AddStudentDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" data-testid="button-submit-student">
-              Add Student
+            <Button 
+              type="submit" 
+              disabled={createStudent.isPending}
+              data-testid="button-submit-student"
+            >
+              {createStudent.isPending ? "Adding..." : "Add Student"}
             </Button>
           </DialogFooter>
         </form>
