@@ -10,6 +10,14 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AssistantSheet } from "@/components/AssistantSheet";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Sparkles, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/Landing";
@@ -74,20 +82,43 @@ function AuthenticatedApp() {
                 <Sparkles className="h-4 w-4 mr-2" />
                 AI Assistant
               </Button>
-              <div className="flex items-center gap-2 pl-2 border-l">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.profileImageUrl || undefined} />
-                  <AvatarFallback>{getInitials()}</AvatarFallback>
-                </Avatar>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLogout}
-                  data-testid="button-logout"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </Button>
+              <div className="pl-2 border-l">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full"
+                      data-testid="button-profile-menu"
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user?.profileImageUrl || undefined} />
+                        <AvatarFallback>{getInitials()}</AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none" data-testid="text-user-name">
+                          {user?.firstName && user?.lastName 
+                            ? `${user.firstName} ${user.lastName}` 
+                            : user?.email}
+                        </p>
+                        {(user?.firstName || user?.lastName) && user?.email && (
+                          <p className="text-xs leading-none text-muted-foreground" data-testid="text-user-email">
+                            {user.email}
+                          </p>
+                        )}
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} data-testid="button-logout">
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </header>
