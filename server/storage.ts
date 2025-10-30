@@ -135,9 +135,9 @@ export class DatabaseStorage implements IStorage {
     const totalStudents = studentsData.length;
     const totalBehaviorLogs = behaviorLogsData.length;
     
-    // Handle both string "false" and potential boolean false
+    // Handle string "false" - completed field is stored as varchar
     const pendingFollowUps = followUpsData.filter(fu => 
-      fu.completed === "false" || fu.completed === false || !fu.completed
+      fu.completed !== "true"
     ).length;
     
     // Category is stored as varchar, ensure exact match

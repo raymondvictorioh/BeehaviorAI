@@ -9,89 +9,49 @@ import { AISummaryCard } from "@/components/AISummaryCard";
 import { MeetingNoteCard } from "@/components/MeetingNoteCard";
 import { FollowUpItem } from "@/components/FollowUpItem";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
-import { ArrowLeft, Plus, Mail, GraduationCap, User } from "lucide-react";
-import { useLocation } from "wouter";
+import { ArrowLeft, Plus, Mail, GraduationCap } from "lucide-react";
+import { useLocation, useRoute } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import type { Student, BehaviorLog, MeetingNote, FollowUp } from "@shared/schema";
+import { format } from "date-fns";
 
 export default function StudentProfile() {
   const [, setLocation] = useLocation();
+  const [, params] = useRoute("/students/:id");
+  const studentId = params?.id;
+  const { user } = useAuth();
+  const orgId = user?.organizations?.[0]?.id;
+
   const [isAddLogDialogOpen, setIsAddLogDialogOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [isLogDetailsOpen, setIsLogDetailsOpen] = useState(false);
 
-  // todo: remove mock functionality
-  const student = {
-    id: "1",
-    name: "Sarah Johnson",
-    email: "sarah.johnson@school.edu",
-    class: "Grade 10A",
-    gender: "Female",
-  };
+  // Fetch student data
+  const { data: student, isLoading: isLoadingStudent } = useQuery<Student>({
+    queryKey: ["/api/organizations", orgId, "students", studentId],
+    enabled: !!orgId && !!studentId,
+  });
 
-  const [behaviorLogs, setBehaviorLogs] = useState([
-    {
-      id: "1",
-      incidentDate: "October 28, 2025",
-      category: "Positive",
-      notes: "Helped a classmate understand a difficult math concept during group work. Demonstrated excellent peer leadership and patience while explaining the material.",
-      strategies: "Continue to encourage peer mentoring opportunities. Consider recommending for student ambassador program.",
-      loggedBy: "Mr. Smith",
-      loggedAt: "October 28, 2025 at 2:15 PM",
-    },
-    {
-      id: "2",
-      incidentDate: "October 25, 2025",
-      category: "Concern",
-      notes: "Late to class for the third time this week. Spoke with student about punctuality and its impact on learning.",
-      strategies: "Follow up with parent meeting scheduled for next week. Monitor attendance closely. Check if there are any transportation issues.",
-      loggedBy: "Mrs. Davis",
-      loggedAt: "October 25, 2025 at 9:30 AM",
-    },
-    {
-      id: "3",
-      incidentDate: "October 22, 2025",
-      category: "Positive",
-      notes: "Excellent presentation on environmental science project. Showed strong research skills and effective communication.",
-      strategies: "",
-      loggedBy: "Dr. Martinez",
-      loggedAt: "October 22, 2025 at 1:45 PM",
-    },
-    {
-      id: "4",
-      incidentDate: "October 20, 2025",
-      category: "Neutral",
-      notes: "Student requested extra time on assignment due to family circumstances. Extension granted until Friday.",
-      strategies: "Check in on Friday to ensure assignment is completed. Offer additional support if needed.",
-      loggedBy: "Mr. Smith",
-      loggedAt: "October 20, 2025 at 11:20 AM",
-    },
-  ]);
+  // Fetch behavior logs
+  const { data: behaviorLogs = [], isLoading: isLoadingLogs } = useQuery<BehaviorLog[]>({
+    queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
+    enabled: !!orgId && !!studentId,
+  });
 
-  const meetingNotes = [
-    {
-      id: "1",
-      date: "October 25, 2025",
-      participants: ["Mrs. Johnson (Parent)", "Mr. Smith (Teacher)"],
-      summary: "Discussed Sarah's recent tardiness and academic progress. Parent committed to ensuring better morning routine.",
-      fullNotes: "Meeting started at 3:00 PM. Mrs. Johnson was concerned about recent behavior changes. We discussed Sarah's academic performance, which remains strong. The tardiness issue was addressed, and Mrs. Johnson explained there have been some family circumstances affecting morning routines. We agreed on a plan to improve punctuality with check-ins every two weeks.",
-    },
-  ];
+  // Fetch meeting notes
+  const { data: meetingNotes = [], isLoading: isLoadingNotes } = useQuery<MeetingNote[]>({
+    queryKey: ["/api/organizations", orgId, "students", studentId, "meeting-notes"],
+    enabled: !!orgId && !!studentId,
+  });
 
-  const followUps = [
-    {
-      id: "1",
-      title: "Check in with Sarah about morning routine progress",
-      dueDate: "November 8, 2025",
-      priority: "medium" as const,
-      completed: false,
-    },
-    {
-      id: "2",
-      title: "Review academic performance in math class",
-      dueDate: "November 15, 2025",
-      priority: "low" as const,
-      completed: false,
-    },
-  ];
+  // Fetch follow-ups
+  const { data: followUps = [], isLoading: isLoadingFollowUps } = useQuery<FollowUp[]>({
+    queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+    enabled: !!orgId && !!studentId,
+  });
+
+  const isLoading = isLoadingStudent || isLoadingLogs || isLoadingNotes || isLoadingFollowUps;
 
   const handleViewLog = (log: any) => {
     setSelectedLog(log);
@@ -99,30 +59,57 @@ export default function StudentProfile() {
   };
 
   const handleUpdateNotes = (id: string, notes: string) => {
-    setBehaviorLogs(logs =>
-      logs.map(log =>
-        log.id === id ? { ...log, notes } : log
-      )
-    );
-    if (selectedLog?.id === id) {
-      setSelectedLog({ ...selectedLog, notes });
-    }
+    // TODO: Implement API call to update notes
+    console.log("Update notes:", id, notes);
   };
 
   const handleUpdateStrategies = (id: string, strategies: string) => {
-    setBehaviorLogs(logs =>
-      logs.map(log =>
-        log.id === id ? { ...log, strategies } : log
-      )
-    );
-    if (selectedLog?.id === id) {
-      setSelectedLog({ ...selectedLog, strategies });
-    }
+    // TODO: Implement API call to update strategies
+    console.log("Update strategies:", id, strategies);
   };
 
   const handleDeleteLog = (id: string) => {
-    setBehaviorLogs(logs => logs.filter(log => log.id !== id));
+    // TODO: Implement API call to delete log
+    console.log("Delete log:", id);
   };
+
+  const getInitials = () => {
+    if (student?.name) {
+      const nameParts = student.name.split(" ");
+      if (nameParts.length >= 2) {
+        return `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase();
+      }
+      return student.name.substring(0, 2).toUpperCase();
+    }
+    return "ST";
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading student profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!student) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold mb-2">Student Not Found</h2>
+          <p className="text-muted-foreground mb-4">
+            The student you're looking for doesn't exist or you don't have access to it.
+          </p>
+          <Button onClick={() => setLocation("/students")} data-testid="button-back-to-students">
+            Back to Students
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -140,36 +127,38 @@ export default function StudentProfile() {
         <CardContent className="p-6">
           <div className="flex items-start gap-6 flex-wrap">
             <Avatar className="h-24 w-24">
-              <AvatarFallback className="text-2xl">SJ</AvatarFallback>
+              <AvatarFallback className="text-2xl">{getInitials()}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <h1 className="text-3xl font-semibold mb-4" data-testid="text-student-name">
                 {student.name}
               </h1>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm" data-testid="text-student-email">{student.email}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <GraduationCap className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm" data-testid="text-student-class">{student.class}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm" data-testid="text-student-gender">{student.gender}</span>
-                </div>
+                {student.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid="text-student-email">{student.email}</span>
+                  </div>
+                )}
+                {student.class && (
+                  <div className="flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm" data-testid="text-student-class">{student.class}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <AISummaryCard
-        summary="Sarah is generally a well-behaved and engaged student who actively participates in class. Recent behavior logs indicate strong leadership qualities and helpful nature towards peers. There have been a few minor concerns about tardiness to morning classes, which may need attention. Overall academic performance remains strong with particular excellence in science subjects."
-        lastUpdated="October 28, 2025 at 2:30 PM"
-        onRegenerate={() => console.log("Regenerating summary")}
-      />
+      {behaviorLogs.length > 0 && (
+        <AISummaryCard
+          summary="AI-generated summary will be available soon. This feature uses behavior logs to provide insights about the student's progress and areas for improvement."
+          lastUpdated={format(new Date(), "MMMM d, yyyy 'at' h:mm a")}
+          onRegenerate={() => console.log("Regenerating summary")}
+        />
+      )}
 
       <Tabs defaultValue="logs" className="w-full">
         <TabsList className="grid w-full grid-cols-3 max-w-md">
@@ -187,16 +176,32 @@ export default function StudentProfile() {
             </Button>
           </div>
           <div className="space-y-4">
-            {behaviorLogs.map((log) => (
-              <BehaviorLogEntry
-                key={log.id}
-                id={log.id}
-                date={log.incidentDate}
-                category={log.category}
-                notes={log.notes}
-                onView={() => handleViewLog(log)}
-              />
-            ))}
+            {behaviorLogs.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Mail className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Behavior Logs Yet</h3>
+                  <p className="text-muted-foreground text-center max-w-md mb-4">
+                    Start tracking this student's behavior by adding your first log entry.
+                  </p>
+                  <Button onClick={() => setIsAddLogDialogOpen(true)} data-testid="button-add-first-log">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add First Log
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              behaviorLogs.map((log) => (
+                <BehaviorLogEntry
+                  key={log.id}
+                  id={log.id}
+                  date={log.loggedAt ? format(new Date(log.loggedAt), "MMMM d, yyyy") : ""}
+                  category={log.category || ""}
+                  notes={log.notes || ""}
+                  onView={() => handleViewLog(log)}
+                />
+              ))
+            )}
           </div>
         </TabsContent>
 
@@ -209,15 +214,29 @@ export default function StudentProfile() {
             </Button>
           </div>
           <div className="space-y-4">
-            {followUps.map((followUp) => (
-              <FollowUpItem
-                key={followUp.id}
-                {...followUp}
-                onToggle={() => console.log("Toggle", followUp.id)}
-                onEdit={() => console.log("Edit", followUp.id)}
-                onDelete={() => console.log("Delete", followUp.id)}
-              />
-            ))}
+            {followUps.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <p className="text-muted-foreground text-center max-w-md">
+                    No follow-up tasks yet. Add follow-ups to track action items for this student.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              followUps.map((followUp) => (
+                <FollowUpItem
+                  key={followUp.id}
+                  id={followUp.id}
+                  title={followUp.title}
+                  dueDate={format(new Date(followUp.dueDate), "MMMM d, yyyy")}
+                  priority={followUp.priority as "low" | "medium" | "high"}
+                  completed={followUp.completed === "true"}
+                  onToggle={() => console.log("Toggle", followUp.id)}
+                  onEdit={() => console.log("Edit", followUp.id)}
+                  onDelete={() => console.log("Delete", followUp.id)}
+                />
+              ))
+            )}
           </div>
         </TabsContent>
 
@@ -230,14 +249,28 @@ export default function StudentProfile() {
             </Button>
           </div>
           <div className="space-y-4">
-            {meetingNotes.map((note) => (
-              <MeetingNoteCard
-                key={note.id}
-                {...note}
-                onEdit={() => console.log("Edit meeting", note.id)}
-                onDelete={() => console.log("Delete meeting", note.id)}
-              />
-            ))}
+            {meetingNotes.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <p className="text-muted-foreground text-center max-w-md">
+                    No meeting notes yet. Document meetings with students or parents here.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              meetingNotes.map((note) => (
+                <MeetingNoteCard
+                  key={note.id}
+                  id={note.id}
+                  date={format(new Date(note.date), "MMMM d, yyyy")}
+                  participants={note.participants}
+                  summary={note.summary}
+                  fullNotes={note.fullNotes ?? ""}
+                  onEdit={() => console.log("Edit meeting", note.id)}
+                  onDelete={() => console.log("Delete meeting", note.id)}
+                />
+              ))
+            )}
           </div>
         </TabsContent>
       </Tabs>
