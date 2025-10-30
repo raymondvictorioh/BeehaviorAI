@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, checkOrganizationAccess } from "./replitAuth";
 import { getChatCompletion } from "./openai";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -57,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/organizations/:id/users", isAuthenticated, async (req: any, res) => {
+  app.get("/api/organizations/:id/users", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { id } = req.params;
       const users = await storage.getOrganizationUsers(id);
@@ -69,7 +69,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Student routes
-  app.get("/api/organizations/:orgId/students", isAuthenticated, async (req: any, res) => {
+  app.get("/api/organizations/:orgId/students", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId } = req.params;
       const students = await storage.getStudents(orgId);
@@ -80,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/organizations/:orgId/students", isAuthenticated, async (req: any, res) => {
+  app.post("/api/organizations/:orgId/students", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId } = req.params;
       const student = await storage.createStudent({
@@ -95,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Behavior log routes
-  app.get("/api/organizations/:orgId/students/:studentId/behavior-logs", isAuthenticated, async (req: any, res) => {
+  app.get("/api/organizations/:orgId/students/:studentId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, studentId } = req.params;
       const logs = await storage.getBehaviorLogs(studentId, orgId);
@@ -106,7 +106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/organizations/:orgId/students/:studentId/behavior-logs", isAuthenticated, async (req: any, res) => {
+  app.post("/api/organizations/:orgId/students/:studentId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, studentId } = req.params;
       const log = await storage.createBehaviorLog({
@@ -121,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/organizations/:orgId/behavior-logs/:id", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/organizations/:orgId/behavior-logs/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, id } = req.params;
       const log = await storage.updateBehaviorLog(id, orgId, req.body);
@@ -132,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/organizations/:orgId/behavior-logs/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/organizations/:orgId/behavior-logs/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, id } = req.params;
       await storage.deleteBehaviorLog(id, orgId);

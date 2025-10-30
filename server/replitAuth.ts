@@ -158,3 +158,27 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return;
   }
 };
+
+export const checkOrganizationAccess: RequestHandler = async (req, res, next) => {
+  const user = req.user as any;
+  const userId = user.claims.sub;
+  const orgId = req.params.orgId || req.params.id;
+
+  if (!orgId) {
+    return res.status(400).json({ message: "Organization ID required" });
+  }
+
+  try {
+    const userOrgs = await storage.getUserOrganizations(userId);
+    const hasAccess = userOrgs.some((org) => org.id === orgId);
+
+    if (!hasAccess) {
+      return res.status(403).json({ message: "Access denied to this organization" });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Error checking organization access:", error);
+    res.status(500).json({ message: "Failed to verify organization access" });
+  }
+};
