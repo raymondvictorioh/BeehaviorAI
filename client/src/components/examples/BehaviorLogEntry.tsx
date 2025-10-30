@@ -8,8 +8,7 @@ export default function BehaviorLogEntryExample() {
         date="October 28, 2025"
         category="Positive"
         notes="Helped a classmate understand a difficult math concept during group work."
-        onEdit={() => console.log('Edit log')}
-        onDelete={() => console.log('Delete log')}
+        onView={() => console.log('View log details')}
       />
     </div>
   );

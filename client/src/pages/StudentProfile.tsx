@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BehaviorLogEntry } from "@/components/BehaviorLogEntry";
+import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
 import { AISummaryCard } from "@/components/AISummaryCard";
 import { MeetingNoteCard } from "@/components/MeetingNoteCard";
 import { FollowUpItem } from "@/components/FollowUpItem";
@@ -14,6 +15,8 @@ import { useLocation } from "wouter";
 export default function StudentProfile() {
   const [, setLocation] = useLocation();
   const [isAddLogDialogOpen, setIsAddLogDialogOpen] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<any>(null);
+  const [isLogDetailsOpen, setIsLogDetailsOpen] = useState(false);
 
   // todo: remove mock functionality
   const student = {
@@ -24,26 +27,36 @@ export default function StudentProfile() {
     gender: "Female",
   };
 
-  const behaviorLogs = [
+  const [behaviorLogs, setBehaviorLogs] = useState([
     {
       id: "1",
       date: "October 28, 2025",
       category: "Positive",
-      notes: "Helped a classmate understand a difficult math concept during group work.",
+      notes: "Helped a classmate understand a difficult math concept during group work. Demonstrated excellent peer leadership and patience while explaining the material.",
+      strategies: "Continue to encourage peer mentoring opportunities. Consider recommending for student ambassador program.",
     },
     {
       id: "2",
       date: "October 25, 2025",
       category: "Concern",
-      notes: "Late to class for the third time this week. Spoke with student about punctuality.",
+      notes: "Late to class for the third time this week. Spoke with student about punctuality and its impact on learning.",
+      strategies: "Follow up with parent meeting scheduled for next week. Monitor attendance closely. Check if there are any transportation issues.",
     },
     {
       id: "3",
       date: "October 22, 2025",
       category: "Positive",
-      notes: "Excellent presentation on environmental science project. Showed strong research skills.",
+      notes: "Excellent presentation on environmental science project. Showed strong research skills and effective communication.",
+      strategies: "",
     },
-  ];
+    {
+      id: "4",
+      date: "October 20, 2025",
+      category: "Neutral",
+      notes: "Student requested extra time on assignment due to family circumstances. Extension granted until Friday.",
+      strategies: "Check in on Friday to ensure assignment is completed. Offer additional support if needed.",
+    },
+  ]);
 
   const meetingNotes = [
     {
@@ -71,6 +84,19 @@ export default function StudentProfile() {
       completed: false,
     },
   ];
+
+  const handleViewLog = (log: any) => {
+    setSelectedLog(log);
+    setIsLogDetailsOpen(true);
+  };
+
+  const handleUpdateStrategies = (id: string, strategies: string) => {
+    setBehaviorLogs(logs =>
+      logs.map(log =>
+        log.id === id ? { ...log, strategies } : log
+      )
+    );
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -138,9 +164,11 @@ export default function StudentProfile() {
             {behaviorLogs.map((log) => (
               <BehaviorLogEntry
                 key={log.id}
-                {...log}
-                onEdit={() => console.log("Edit log", log.id)}
-                onDelete={() => console.log("Delete log", log.id)}
+                id={log.id}
+                date={log.date}
+                category={log.category}
+                notes={log.notes}
+                onView={() => handleViewLog(log)}
               />
             ))}
           </div>
@@ -192,6 +220,15 @@ export default function StudentProfile() {
         open={isAddLogDialogOpen}
         onOpenChange={setIsAddLogDialogOpen}
         onSubmit={(data) => console.log("New log:", data)}
+      />
+
+      <BehaviorLogDetailsSheet
+        open={isLogDetailsOpen}
+        onOpenChange={setIsLogDetailsOpen}
+        log={selectedLog}
+        onUpdate={handleUpdateStrategies}
+        onEdit={(id) => console.log("Edit log", id)}
+        onDelete={(id) => console.log("Delete log", id)}
       />
     </div>
   );
