@@ -30,31 +30,39 @@ export default function StudentProfile() {
   const [behaviorLogs, setBehaviorLogs] = useState([
     {
       id: "1",
-      date: "October 28, 2025",
+      incidentDate: "October 28, 2025",
       category: "Positive",
       notes: "Helped a classmate understand a difficult math concept during group work. Demonstrated excellent peer leadership and patience while explaining the material.",
       strategies: "Continue to encourage peer mentoring opportunities. Consider recommending for student ambassador program.",
+      loggedBy: "Mr. Smith",
+      loggedAt: "October 28, 2025 at 2:15 PM",
     },
     {
       id: "2",
-      date: "October 25, 2025",
+      incidentDate: "October 25, 2025",
       category: "Concern",
       notes: "Late to class for the third time this week. Spoke with student about punctuality and its impact on learning.",
       strategies: "Follow up with parent meeting scheduled for next week. Monitor attendance closely. Check if there are any transportation issues.",
+      loggedBy: "Mrs. Davis",
+      loggedAt: "October 25, 2025 at 9:30 AM",
     },
     {
       id: "3",
-      date: "October 22, 2025",
+      incidentDate: "October 22, 2025",
       category: "Positive",
       notes: "Excellent presentation on environmental science project. Showed strong research skills and effective communication.",
       strategies: "",
+      loggedBy: "Dr. Martinez",
+      loggedAt: "October 22, 2025 at 1:45 PM",
     },
     {
       id: "4",
-      date: "October 20, 2025",
+      incidentDate: "October 20, 2025",
       category: "Neutral",
       notes: "Student requested extra time on assignment due to family circumstances. Extension granted until Friday.",
       strategies: "Check in on Friday to ensure assignment is completed. Offer additional support if needed.",
+      loggedBy: "Mr. Smith",
+      loggedAt: "October 20, 2025 at 11:20 AM",
     },
   ]);
 
@@ -90,12 +98,30 @@ export default function StudentProfile() {
     setIsLogDetailsOpen(true);
   };
 
+  const handleUpdateNotes = (id: string, notes: string) => {
+    setBehaviorLogs(logs =>
+      logs.map(log =>
+        log.id === id ? { ...log, notes } : log
+      )
+    );
+    if (selectedLog?.id === id) {
+      setSelectedLog({ ...selectedLog, notes });
+    }
+  };
+
   const handleUpdateStrategies = (id: string, strategies: string) => {
     setBehaviorLogs(logs =>
       logs.map(log =>
         log.id === id ? { ...log, strategies } : log
       )
     );
+    if (selectedLog?.id === id) {
+      setSelectedLog({ ...selectedLog, strategies });
+    }
+  };
+
+  const handleDeleteLog = (id: string) => {
+    setBehaviorLogs(logs => logs.filter(log => log.id !== id));
   };
 
   return (
@@ -165,7 +191,7 @@ export default function StudentProfile() {
               <BehaviorLogEntry
                 key={log.id}
                 id={log.id}
-                date={log.date}
+                date={log.incidentDate}
                 category={log.category}
                 notes={log.notes}
                 onView={() => handleViewLog(log)}
@@ -226,9 +252,9 @@ export default function StudentProfile() {
         open={isLogDetailsOpen}
         onOpenChange={setIsLogDetailsOpen}
         log={selectedLog}
-        onUpdate={handleUpdateStrategies}
-        onEdit={(id) => console.log("Edit log", id)}
-        onDelete={(id) => console.log("Delete log", id)}
+        onUpdateNotes={handleUpdateNotes}
+        onUpdateStrategies={handleUpdateStrategies}
+        onDelete={handleDeleteLog}
       />
     </div>
   );

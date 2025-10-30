@@ -11,20 +11,22 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, Edit, Trash2, Save } from "lucide-react";
+import { Calendar, Edit, Trash2, Save, Clock, User } from "lucide-react";
 
 interface BehaviorLogDetailsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   log: {
     id: string;
-    date: string;
+    incidentDate: string;
     category: string;
     notes: string;
     strategies?: string;
+    loggedBy: string;
+    loggedAt: string;
   } | null;
-  onUpdate?: (id: string, strategies: string) => void;
-  onEdit?: (id: string) => void;
+  onUpdateNotes?: (id: string, notes: string) => void;
+  onUpdateStrategies?: (id: string, strategies: string) => void;
   onDelete?: (id: string) => void;
 }
 
@@ -39,26 +41,29 @@ export function BehaviorLogDetailsSheet({
   open,
   onOpenChange,
   log,
-  onUpdate,
-  onEdit,
+  onUpdateNotes,
+  onUpdateStrategies,
   onDelete,
 }: BehaviorLogDetailsSheetProps) {
+  const [notes, setNotes] = useState(log?.notes || "");
   const [strategies, setStrategies] = useState(log?.strategies || "");
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [isEditingStrategies, setIsEditingStrategies] = useState(false);
 
   if (!log) return null;
 
   const categoryColor = categoryColors[log.category.toLowerCase()] || "bg-gray-500";
 
-  const handleSave = () => {
-    console.log("Saving strategies:", strategies);
-    onUpdate?.(log.id, strategies);
-    setIsEditing(false);
+  const handleSaveNotes = () => {
+    console.log("Saving incident notes:", notes);
+    onUpdateNotes?.(log.id, notes);
+    setIsEditingNotes(false);
   };
 
-  const handleEdit = () => {
-    console.log("Editing log:", log.id);
-    onEdit?.(log.id);
+  const handleSaveStrategies = () => {
+    console.log("Saving strategies:", strategies);
+    onUpdateStrategies?.(log.id, strategies);
+    setIsEditingStrategies(false);
   };
 
   const handleDelete = () => {
@@ -82,22 +87,80 @@ export function BehaviorLogDetailsSheet({
 
         <div className="space-y-6 mt-6">
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground" data-testid="text-detail-date">
-                {log.date}
+              <span className="text-sm text-muted-foreground" data-testid="text-detail-incident-date">
+                Incident: {log.incidentDate}
               </span>
               <Badge variant="secondary" className="text-xs" data-testid="text-detail-category">
                 {log.category}
               </Badge>
             </div>
 
-            <div>
+            <div className="space-y-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <User className="h-3 w-3" />
+                <span data-testid="text-detail-logged-by">Logged by: {log.loggedBy}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="h-3 w-3" />
+                <span data-testid="text-detail-logged-at">Logged at: {log.loggedAt}</span>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <Label className="text-base font-semibold">Incident Notes</Label>
-              <p className="text-sm mt-2 whitespace-pre-wrap" data-testid="text-detail-notes">
+              {!isEditingNotes && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setNotes(log.notes);
+                    setIsEditingNotes(true);
+                  }}
+                  data-testid="button-edit-notes"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+              )}
+            </div>
+
+            {isEditingNotes ? (
+              <div className="space-y-4">
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Describe the incident or observation..."
+                  className="min-h-32"
+                  data-testid="input-notes"
+                />
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveNotes} data-testid="button-save-notes">
+                    <Save className="h-4 w-4 mr-2" />
+                    Save
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setNotes(log.notes);
+                      setIsEditingNotes(false);
+                    }}
+                    data-testid="button-cancel-notes"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm whitespace-pre-wrap" data-testid="text-detail-notes">
                 {log.notes}
               </p>
-            </div>
+            )}
           </div>
 
           <Separator />
@@ -107,11 +170,14 @@ export function BehaviorLogDetailsSheet({
               <Label className="text-base font-semibold">
                 Strategies & Follow-up Measures
               </Label>
-              {!isEditing && (
+              {!isEditingStrategies && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => {
+                    setStrategies(log.strategies || "");
+                    setIsEditingStrategies(true);
+                  }}
                   data-testid="button-edit-strategies"
                 >
                   <Edit className="h-4 w-4 mr-2" />
@@ -120,7 +186,7 @@ export function BehaviorLogDetailsSheet({
               )}
             </div>
 
-            {isEditing ? (
+            {isEditingStrategies ? (
               <div className="space-y-4">
                 <Textarea
                   value={strategies}
@@ -130,7 +196,7 @@ export function BehaviorLogDetailsSheet({
                   data-testid="input-strategies"
                 />
                 <div className="flex gap-2">
-                  <Button onClick={handleSave} data-testid="button-save-strategies">
+                  <Button onClick={handleSaveStrategies} data-testid="button-save-strategies">
                     <Save className="h-4 w-4 mr-2" />
                     Save
                   </Button>
@@ -138,7 +204,7 @@ export function BehaviorLogDetailsSheet({
                     variant="outline"
                     onClick={() => {
                       setStrategies(log.strategies || "");
-                      setIsEditing(false);
+                      setIsEditingStrategies(false);
                     }}
                     data-testid="button-cancel-strategies"
                   >
@@ -148,9 +214,9 @@ export function BehaviorLogDetailsSheet({
               </div>
             ) : (
               <div>
-                {strategies ? (
+                {log.strategies ? (
                   <p className="text-sm whitespace-pre-wrap" data-testid="text-strategies">
-                    {strategies}
+                    {log.strategies}
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">
@@ -163,24 +229,15 @@ export function BehaviorLogDetailsSheet({
 
           <Separator />
 
-          <div className="flex gap-2">
+          <div className="flex justify-end">
             <Button
               variant="outline"
-              onClick={handleEdit}
-              className="flex-1"
-              data-testid="button-edit-log"
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Log
-            </Button>
-            <Button
-              variant="destructive"
               onClick={handleDelete}
-              className="flex-1"
+              className="text-destructive hover:text-destructive"
               data-testid="button-delete-log"
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              Delete
+              Delete Log
             </Button>
           </div>
         </div>
