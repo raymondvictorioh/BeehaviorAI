@@ -61,8 +61,12 @@ Preferred communication style: Simple, everyday language.
 
 **API Structure:**
 - RESTful endpoints registered in `server/routes.ts`
-- Currently implements `/api/assistant/chat` for AI interactions
-- Session-based architecture prepared (storage layer exists)
+- Authentication endpoints: `/api/auth/user`, `/api/auth/login`, `/api/auth/signup`, `/api/auth/logout`
+- Organization endpoints: `/api/organizations`, `/api/organizations/:id/users`, `/api/organizations/:id/stats`
+- Student endpoints: `/api/organizations/:orgId/students`
+- AI assistant: `/api/assistant/chat`
+- All organization-scoped routes protected with checkOrganizationAccess middleware
+- Session-based authentication using Replit Auth
 
 **Development Server:**
 - Vite dev server integrated for HMR
@@ -71,9 +75,9 @@ Preferred communication style: Simple, everyday language.
 
 **Storage Layer:**
 - Interface-based storage system (`IStorage`) in `server/storage.ts`
-- Currently uses in-memory storage (`MemStorage`)
-- Designed to be swapped with database implementation
-- User model defined but not yet fully integrated
+- Uses DatabaseStorage implementation with PostgreSQL
+- Multi-tenant architecture with organization-scoped data access
+- All operations enforce organization isolation via checkOrganizationAccess middleware
 
 ### Data Storage
 
@@ -84,7 +88,13 @@ Preferred communication style: Simple, everyday language.
 - WebSocket support for Neon using `ws` package
 
 **Current Schema:**
-- Users table with UUID primary keys, username, and password
+- Users table: id, email, name, replit_user_id (for Replit Auth integration)
+- Organizations table: id, name, code, email, phone, address, owner_id, created_at
+- Organization_users table: user_id, organization_id, role, joined_at (for multi-tenant access control)
+- Students table: id, organization_id, first_name, last_name, grade, profile_picture
+- Behavior_logs table: id, organization_id, student_id, category, description, logged_at
+- Meeting_notes table: id, organization_id, student_id, date, participants, summary, full_notes
+- Follow_ups table: id, organization_id, student_id, title, due_date, priority, completed
 - Schema uses Drizzle-Zod for type-safe validation
 
 **Database Configuration:**
@@ -92,7 +102,12 @@ Preferred communication style: Simple, everyday language.
 - Database URL expected in `DATABASE_URL` environment variable
 - Schema push command: `npm run db:push`
 
-**Note:** The application currently has mock data in components but is set up to integrate with PostgreSQL database. The storage layer and database schema exist but need to be connected to replace the mock implementations.
+**Multi-Tenant Implementation:**
+- All organization-scoped data includes organization_id foreign key
+- checkOrganizationAccess middleware enforces data isolation
+- Dashboard and Students pages use React Query to fetch real database data
+- Follow-ups completed field stored as varchar("false"/"true"), not boolean
+- Dashboard stats handle both string/boolean values for completed field and case-insensitive category comparison
 
 ### External Dependencies
 
