@@ -134,9 +134,16 @@ export class DatabaseStorage implements IStorage {
 
     const totalStudents = studentsData.length;
     const totalBehaviorLogs = behaviorLogsData.length;
-    const pendingFollowUps = followUpsData.filter(fu => fu.completed === "false").length;
     
-    const positiveLogs = behaviorLogsData.filter(log => log.category === "positive").length;
+    // Handle both string "false" and potential boolean false
+    const pendingFollowUps = followUpsData.filter(fu => 
+      fu.completed === "false" || fu.completed === false || !fu.completed
+    ).length;
+    
+    // Category is stored as varchar, ensure exact match
+    const positiveLogs = behaviorLogsData.filter(log => 
+      log.category?.toLowerCase() === "positive"
+    ).length;
     const positiveLogsPercentage = totalBehaviorLogs > 0 
       ? Math.round((positiveLogs / totalBehaviorLogs) * 100) 
       : 0;
