@@ -65,7 +65,8 @@ export default function StudentProfile() {
         body: JSON.stringify({
           category: data.category,
           notes: data.notes,
-          loggedAt: new Date(data.date).toISOString(),
+          incidentDate: new Date(data.date).toISOString(),
+          loggedBy: user?.email || "Unknown",
         }),
       });
       if (!response.ok) {
@@ -233,7 +234,7 @@ export default function StudentProfile() {
                 <BehaviorLogEntry
                   key={log.id}
                   id={log.id}
-                  date={log.loggedAt ? format(new Date(log.loggedAt), "MMMM d, yyyy") : ""}
+                  date={log.incidentDate ? format(new Date(log.incidentDate), "MMMM d, yyyy") : ""}
                   category={log.category || ""}
                   notes={log.notes || ""}
                   onView={() => handleViewLog(log)}

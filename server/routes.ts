@@ -147,10 +147,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { orgId, studentId } = req.params;
       const log = await storage.createBehaviorLog({
-        ...req.body,
         organizationId: orgId,
         studentId,
-        loggedAt: req.body.loggedAt ? new Date(req.body.loggedAt) : new Date(),
+        category: req.body.category,
+        notes: req.body.notes,
+        incidentDate: req.body.incidentDate ? new Date(req.body.incidentDate) : new Date(),
+        loggedBy: req.body.loggedBy || "Unknown",
+        strategies: req.body.strategies || null,
       });
       res.json(log);
     } catch (error) {
