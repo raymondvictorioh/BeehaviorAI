@@ -12,6 +12,9 @@ BehaviorHub is a SaaS application for school behavior management, designed to he
 - Consistent date formatting (dd-MM-yyyy with time) throughout the application
 - AI-generated behavior summaries using OpenAI's GPT-5 model
 - Meeting notes and follow-up task management
+- **Rich text follow-up management with Kanban board view**
+- **Follow-up workflow tracking (To-Do, In-Progress, Done, Archived)**
+- **HTML sanitization for rich text content to prevent XSS attacks**
 - Report generation for students and classes
 - Real-time AI assistant for contextual help
 
@@ -99,7 +102,10 @@ Preferred communication style: Simple, everyday language.
   - Email uniqueness enforced per organization (students in different orgs can share emails)
 - Behavior_logs table: id, organization_id, student_id, category, notes, logged_at
 - Meeting_notes table: id, organization_id, student_id, date, participants, summary, full_notes
-- Follow_ups table: id, organization_id, student_id, title, due_date, priority, completed
+- Follow_ups table: id, organization_id, student_id, title, description (rich text HTML), due_date (nullable), status (To-Do, In-Progress, Done, Archived), assignee (nullable), created_at, updated_at
+  - **Description field stores sanitized HTML from rich text editor**
+  - **Status field replaced priority field for workflow management**
+  - **Assignee field tracks task ownership**
 - Schema uses Drizzle-Zod for type-safe validation
 
 **Database Configuration:**
@@ -111,8 +117,7 @@ Preferred communication style: Simple, everyday language.
 - All organization-scoped data includes organization_id foreign key
 - checkOrganizationAccess middleware enforces data isolation
 - Dashboard and Students pages use React Query to fetch real database data
-- Follow-ups completed field stored as varchar("false"/"true"), not boolean
-- Dashboard stats handle both string/boolean values for completed field and case-insensitive category comparison
+- Dashboard stats filter follow-ups by status (excludes Done and Archived from pending count)
 
 ### External Dependencies
 
@@ -134,6 +139,8 @@ Preferred communication style: Simple, everyday language.
 - React Hook Form with Zod resolvers for form validation
 - date-fns for date formatting
 - cmdk for command palette functionality
+- **Tiptap for rich text editing (follow-up descriptions)**
+- **DOMPurify (isomorphic-dompurify) for HTML sanitization and XSS prevention**
 
 **Development Tools:**
 - Replit-specific plugins for development environment
