@@ -192,6 +192,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createStudent(student: InsertStudent): Promise<Student> {
+    if (student.email) {
+      const existingStudent = await db
+        .select()
+        .from(students)
+        .where(
+          and(
+            eq(students.organizationId, student.organizationId),
+            eq(students.email, student.email)
+          )
+        );
+      
+      if (existingStudent.length > 0) {
+        throw new Error(`A student with email ${student.email} already exists in this organization`);
+      }
+    }
+    
     const [newStudent] = await db.insert(students).values(student).returning();
     return newStudent;
   }

@@ -113,8 +113,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         organizationId: orgId,
       });
       res.json(student);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating student:", error);
+      if (error.message && error.message.includes("already exists")) {
+        return res.status(400).json({ message: error.message });
+      }
       res.status(500).json({ message: "Failed to create student" });
     }
   });

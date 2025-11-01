@@ -51,7 +51,8 @@ export function AddStudentDialog({
         body: JSON.stringify(data),
       });
       if (!response.ok) {
-        throw new Error("Failed to create student");
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create student");
       }
       return response.json();
     },
@@ -67,10 +68,10 @@ export function AddStudentDialog({
       setGender("");
       onOpenChange(false);
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to add student. Please try again.",
+        description: error.message || "Failed to add student. Please try again.",
         variant: "destructive",
       });
     },
