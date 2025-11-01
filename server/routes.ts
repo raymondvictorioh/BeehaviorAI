@@ -115,9 +115,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(student);
     } catch (error: any) {
       console.error("Error creating student:", error);
+      
       if (error.message && error.message.includes("already exists")) {
         return res.status(400).json({ message: error.message });
       }
+      
+      if (error.code === "23505" || (error.constraint && error.constraint === "unique_email_per_org")) {
+        const email = req.body.email;
+        return res.status(400).json({ 
+          message: `A student with email ${email} already exists in this organization` 
+        });
+      }
+      
       res.status(500).json({ message: "Failed to create student" });
     }
   });
