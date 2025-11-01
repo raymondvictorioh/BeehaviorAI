@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, User, MoreVertical } from "lucide-react";
 import { format } from "date-fns";
+import DOMPurify from "isomorphic-dompurify";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -94,7 +95,12 @@ export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange }: Kan
                   {followUp.description && (
                     <div
                       className="text-xs text-muted-foreground line-clamp-3 prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{ __html: followUp.description }}
+                      dangerouslySetInnerHTML={{ 
+                        __html: DOMPurify.sanitize(followUp.description, {
+                          ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote'],
+                          ALLOWED_ATTR: []
+                        })
+                      }}
                       data-testid={`description-${followUp.id}`}
                     />
                   )}

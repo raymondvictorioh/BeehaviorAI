@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import DOMPurify from "isomorphic-dompurify";
 import { insertFollowUpSchema } from "@shared/schema";
 import {
   Dialog,
@@ -72,9 +73,15 @@ export function AddFollowUpDialog({
   });
 
   const handleSubmit = async (data: FormData) => {
+    // Sanitize HTML description to prevent XSS attacks
+    const sanitizedDescription = description ? DOMPurify.sanitize(description, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote'],
+      ALLOWED_ATTR: []
+    }) : "";
+    
     await onSubmit({
       ...data,
-      description,
+      description: sanitizedDescription,
     });
     form.reset();
     setDescription("");
