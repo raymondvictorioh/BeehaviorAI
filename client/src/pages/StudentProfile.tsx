@@ -14,7 +14,7 @@ import { useLocation, useRoute } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Student, BehaviorLog, MeetingNote, FollowUp } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -92,24 +92,73 @@ export default function StudentProfile() {
     },
   });
 
+  // Update behavior log mutation
+  const updateBehaviorLog = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<{ notes: string; strategies: string }> }) => {
+      return apiRequest("PATCH", `/api/organizations/${orgId}/behavior-logs/${id}`, updates);
+    },
+    onSuccess: async (_, variables) => {
+      // Invalidate and refetch the behavior logs
+      await queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+      
+      // Update the selected log with the new data
+      if (selectedLog && selectedLog.id === variables.id) {
+        setSelectedLog((prev: any) => ({
+          ...prev,
+          ...variables.updates,
+        }));
+      }
+      
+      toast({
+        title: "Log updated",
+        description: "The behavior log has been successfully updated.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update behavior log. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete behavior log mutation
+  const deleteBehaviorLog = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/organizations/${orgId}/behavior-logs/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+      toast({
+        title: "Log deleted",
+        description: "The behavior log has been successfully deleted.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete behavior log. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleViewLog = (log: any) => {
     setSelectedLog(log);
     setIsLogDetailsOpen(true);
   };
 
   const handleUpdateNotes = (id: string, notes: string) => {
-    // TODO: Implement API call to update notes
-    console.log("Update notes:", id, notes);
+    updateBehaviorLog.mutate({ id, updates: { notes } });
   };
 
   const handleUpdateStrategies = (id: string, strategies: string) => {
-    // TODO: Implement API call to update strategies
-    console.log("Update strategies:", id, strategies);
+    updateBehaviorLog.mutate({ id, updates: { strategies } });
   };
 
   const handleDeleteLog = (id: string) => {
-    // TODO: Implement API call to delete log
-    console.log("Delete log:", id);
+    deleteBehaviorLog.mutate(id);
   };
 
   const getInitials = () => {
@@ -194,7 +243,7 @@ export default function StudentProfile() {
       {behaviorLogs.length > 0 && (
         <AISummaryCard
           summary="AI-generated summary will be available soon. This feature uses behavior logs to provide insights about the student's progress and areas for improvement."
-          lastUpdated={format(new Date(), "MMMM d, yyyy 'at' h:mm a")}
+          lastUpdated={format(new Date(), "dd-MM-yyyy 'at' h:mm a")}
           onRegenerate={() => console.log("Regenerating summary")}
         />
       )}
@@ -234,7 +283,7 @@ export default function StudentProfile() {
                 <BehaviorLogEntry
                   key={log.id}
                   id={log.id}
-                  date={log.incidentDate ? format(new Date(log.incidentDate), "MMMM d, yyyy") : ""}
+                  date={log.incidentDate ? format(new Date(log.incidentDate), "dd-MM-yyyy") : ""}
                   category={log.category || ""}
                   notes={log.notes || ""}
                   onView={() => handleViewLog(log)}
@@ -267,7 +316,7 @@ export default function StudentProfile() {
                   key={followUp.id}
                   id={followUp.id}
                   title={followUp.title}
-                  dueDate={format(new Date(followUp.dueDate), "MMMM d, yyyy")}
+                  dueDate={format(new Date(followUp.dueDate), "dd-MM-yyyy")}
                   priority={followUp.priority as "low" | "medium" | "high"}
                   completed={followUp.completed === "true"}
                   onToggle={() => console.log("Toggle", followUp.id)}
@@ -301,7 +350,7 @@ export default function StudentProfile() {
                 <MeetingNoteCard
                   key={note.id}
                   id={note.id}
-                  date={format(new Date(note.date), "MMMM d, yyyy")}
+                  date={format(new Date(note.date), "dd-MM-yyyy")}
                   participants={note.participants}
                   summary={note.summary}
                   fullNotes={note.fullNotes ?? ""}

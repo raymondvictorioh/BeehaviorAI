@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
@@ -6,12 +6,23 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, Edit, Trash2, Save, Clock, User } from "lucide-react";
+import { format } from "date-fns";
 
 interface BehaviorLogDetailsSheetProps {
   open: boolean;
@@ -49,6 +60,15 @@ export function BehaviorLogDetailsSheet({
   const [strategies, setStrategies] = useState(log?.strategies || "");
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [isEditingStrategies, setIsEditingStrategies] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // Sync local state when log prop changes
+  useEffect(() => {
+    if (log) {
+      setNotes(log.notes || "");
+      setStrategies(log.strategies || "");
+    }
+  }, [log]);
 
   if (!log) return null;
 
@@ -66,10 +86,20 @@ export function BehaviorLogDetailsSheet({
     setIsEditingStrategies(false);
   };
 
-  const handleDelete = () => {
+  const handleConfirmDelete = () => {
     console.log("Deleting log:", log.id);
     onDelete?.(log.id);
+    setShowDeleteDialog(false);
     onOpenChange(false);
+  };
+
+  // Format dates consistently as dd-MM-yyyy with time
+  const formatDateTime = (date: string | Date) => {
+    return format(new Date(date), "dd-MM-yyyy 'at' h:mm a");
+  };
+
+  const formatDate = (date: string | Date) => {
+    return format(new Date(date), "dd-MM-yyyy");
   };
 
   return (
@@ -90,7 +120,7 @@ export function BehaviorLogDetailsSheet({
             <div className="flex items-center gap-2 flex-wrap">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground" data-testid="text-detail-incident-date">
-                Incident: {log.incidentDate}
+                Incident: {formatDateTime(log.incidentDate)}
               </span>
               <Badge variant="secondary" className="text-xs" data-testid="text-detail-category">
                 {log.category}
@@ -104,7 +134,7 @@ export function BehaviorLogDetailsSheet({
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-3 w-3" />
-                <span data-testid="text-detail-logged-at">Logged at: {log.loggedAt}</span>
+                <span data-testid="text-detail-logged-at">Logged at: {formatDateTime(log.loggedAt)}</span>
               </div>
             </div>
           </div>
@@ -232,7 +262,7 @@ export function BehaviorLogDetailsSheet({
           <div className="flex justify-end">
             <Button
               variant="outline"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteDialog(true)}
               className="text-destructive hover:text-destructive"
               data-testid="button-delete-log"
             >
@@ -242,6 +272,27 @@ export function BehaviorLogDetailsSheet({
           </div>
         </div>
       </SheetContent>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent data-testid="dialog-delete-confirmation">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this behavior log. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              Yes, Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }
