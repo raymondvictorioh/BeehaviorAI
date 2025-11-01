@@ -147,15 +147,18 @@ export const followUps = pgTable("follow_ups", {
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   studentId: varchar("student_id").notNull().references(() => students.id),
   title: varchar("title", { length: 255 }).notNull(),
-  dueDate: timestamp("due_date").notNull(),
-  priority: varchar("priority", { length: 50 }).notNull(), // low, medium, high
-  completed: varchar("completed", { length: 10 }).notNull().default("false"),
+  description: text("description"), // Rich text content
+  dueDate: timestamp("due_date"),
+  status: varchar("status", { length: 50 }).notNull().default("To-Do"), // To-Do, In-Progress, Done, Archived
+  assignee: varchar("assignee", { length: 255 }), // User assigned to this follow-up
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertFollowUpSchema = createInsertSchema(followUps).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export type InsertFollowUp = z.infer<typeof insertFollowUpSchema>;
