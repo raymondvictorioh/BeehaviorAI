@@ -11,8 +11,10 @@ import { FollowUpItem } from "@/components/FollowUpItem";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
 import { ArrowLeft, Plus, Mail, GraduationCap } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import type { Student, BehaviorLog, MeetingNote, FollowUp } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -26,6 +28,7 @@ export default function StudentProfile() {
   const [isAddLogDialogOpen, setIsAddLogDialogOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [isLogDetailsOpen, setIsLogDetailsOpen] = useState(false);
+  const { toast } = useToast();
 
   // Fetch student data
   const { data: student, isLoading: isLoadingStudent } = useQuery<Student>({
@@ -52,6 +55,41 @@ export default function StudentProfile() {
   });
 
   const isLoading = isLoadingStudent || isLoadingLogs || isLoadingNotes || isLoadingFollowUps;
+
+  // Create behavior log mutation
+  const createBehaviorLog = useMutation({
+    mutationFn: async (data: { date: string; category: string; notes: string }) => {
+      const response = await fetch(`/api/organizations/${orgId}/students/${studentId}/behavior-logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: data.category,
+          notes: data.notes,
+          loggedAt: new Date(data.date).toISOString(),
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create behavior log");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+      toast({
+        title: "Behavior log added",
+        description: "The behavior log has been successfully recorded.",
+      });
+      setIsAddLogDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add behavior log. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleViewLog = (log: any) => {
     setSelectedLog(log);
@@ -278,7 +316,7 @@ export default function StudentProfile() {
       <AddBehaviorLogDialog
         open={isAddLogDialogOpen}
         onOpenChange={setIsAddLogDialogOpen}
-        onSubmit={(data) => console.log("New log:", data)}
+        onSubmit={(data) => createBehaviorLog.mutate(data)}
       />
 
       <BehaviorLogDetailsSheet

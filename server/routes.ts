@@ -150,6 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         organizationId: orgId,
         studentId,
+        loggedAt: req.body.loggedAt ? new Date(req.body.loggedAt) : new Date(),
       });
       res.json(log);
     } catch (error) {
