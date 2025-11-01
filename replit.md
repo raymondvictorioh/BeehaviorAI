@@ -91,8 +91,10 @@ Preferred communication style: Simple, everyday language.
 - Users table: id, email, name, replit_user_id (for Replit Auth integration)
 - Organizations table: id, name, code, email, phone, address, owner_id, created_at
 - Organization_users table: user_id, organization_id, role, joined_at (for multi-tenant access control)
-- Students table: id, organization_id, first_name, last_name, grade, profile_picture
-- Behavior_logs table: id, organization_id, student_id, category, description, logged_at
+- Students table: id, organization_id, name, email, class, gender, created_at, updated_at
+  - Unique constraint on (organization_id, email) via "unique_email_per_org" index
+  - Email uniqueness enforced per organization (students in different orgs can share emails)
+- Behavior_logs table: id, organization_id, student_id, category, notes, logged_at
 - Meeting_notes table: id, organization_id, student_id, date, participants, summary, full_notes
 - Follow_ups table: id, organization_id, student_id, title, due_date, priority, completed
 - Schema uses Drizzle-Zod for type-safe validation
