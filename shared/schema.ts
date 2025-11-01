@@ -6,6 +6,7 @@ import {
   timestamp,
   varchar,
   text,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -86,7 +87,9 @@ export const students = pgTable("students", {
   gender: varchar("gender", { length: 50 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  uniqueEmailPerOrg: uniqueIndex("unique_email_per_org").on(table.organizationId, table.email),
+}));
 
 export const insertStudentSchema = createInsertSchema(students).omit({
   id: true,
