@@ -7,6 +7,9 @@ BehaviorHub is a SaaS application for school behavior management, designed to he
 **Core Functionality:**
 - Student profile management with behavior tracking
 - Behavior log creation and management (positive, neutral, concern, serious categories)
+- Behavior log editing: Edit incident notes and strategies/follow-up measures
+- Behavior log deletion with confirmation popup to prevent accidental removal
+- Consistent date formatting (dd-MM-yyyy with time) throughout the application
 - AI-generated behavior summaries using OpenAI's GPT-5 model
 - Meeting notes and follow-up task management
 - Report generation for students and classes
