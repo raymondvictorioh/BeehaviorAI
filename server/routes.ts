@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, checkOrganizationAccess } from "./replitAuth";
 import { getChatCompletion } from "./openai";
+import { insertFollowUpSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -205,6 +206,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching follow-ups:", error);
       res.status(500).json({ message: "Failed to fetch follow-ups" });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/students/:studentId/follow-ups", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const followUpData = insertFollowUpSchema.parse({
+        ...req.body,
+        organizationId: orgId,
+        studentId,
+      });
+      const newFollowUp = await storage.createFollowUp(followUpData);
+      res.json(newFollowUp);
+    } catch (error) {
+      console.error("Error creating follow-up:", error);
+      res.status(500).json({ message: "Failed to create follow-up" });
+    }
+  });
+
+  app.patch("/api/organizations/:orgId/follow-ups/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const updatedFollowUp = await storage.updateFollowUp(id, orgId, req.body);
+      res.json(updatedFollowUp);
+    } catch (error) {
+      console.error("Error updating follow-up:", error);
+      res.status(500).json({ message: "Failed to update follow-up" });
+    }
+  });
+
+  app.delete("/api/organizations/:orgId/follow-ups/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      await storage.deleteFollowUp(id, orgId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting follow-up:", error);
+      res.status(500).json({ message: "Failed to delete follow-up" });
     }
   });
 

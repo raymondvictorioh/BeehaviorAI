@@ -7,8 +7,9 @@ import { BehaviorLogEntry } from "@/components/BehaviorLogEntry";
 import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
 import { AISummaryCard } from "@/components/AISummaryCard";
 import { MeetingNoteCard } from "@/components/MeetingNoteCard";
-import { FollowUpItem } from "@/components/FollowUpItem";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
+import { AddFollowUpDialog } from "@/components/AddFollowUpDialog";
+import { KanbanBoard } from "@/components/KanbanBoard";
 import { ArrowLeft, Plus, Mail, GraduationCap } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -28,6 +29,7 @@ export default function StudentProfile() {
   const [isAddLogDialogOpen, setIsAddLogDialogOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [isLogDetailsOpen, setIsLogDetailsOpen] = useState(false);
+  const [isAddFollowUpDialogOpen, setIsAddFollowUpDialogOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch student data
@@ -139,6 +141,69 @@ export default function StudentProfile() {
       toast({
         title: "Error",
         description: error.message || "Failed to delete behavior log. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create follow-up mutation
+  const createFollowUp = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/follow-ups`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      toast({
+        title: "Follow-up created",
+        description: "The follow-up has been successfully created.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create follow-up. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update follow-up mutation
+  const updateFollowUp = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<FollowUp> }) => {
+      return apiRequest("PATCH", `/api/organizations/${orgId}/follow-ups/${id}`, updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      toast({
+        title: "Follow-up updated",
+        description: "The follow-up has been successfully updated.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update follow-up. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete follow-up mutation
+  const deleteFollowUp = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/organizations/${orgId}/follow-ups/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      toast({
+        title: "Follow-up deleted",
+        description: "The follow-up has been successfully deleted.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete follow-up. Please try again.",
         variant: "destructive",
       });
     },
@@ -294,38 +359,49 @@ export default function StudentProfile() {
         </TabsContent>
 
         <TabsContent value="followups" className="space-y-4 mt-6">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold">Follow-up Points</h2>
-            <Button data-testid="button-add-followup">
+            <Button 
+              onClick={() => setIsAddFollowUpDialogOpen(true)}
+              data-testid="button-add-followup"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add Follow-up
             </Button>
           </div>
-          <div className="space-y-4">
-            {followUps.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <p className="text-muted-foreground text-center max-w-md">
-                    No follow-up tasks yet. Add follow-ups to track action items for this student.
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              followUps.map((followUp) => (
-                <FollowUpItem
-                  key={followUp.id}
-                  id={followUp.id}
-                  title={followUp.title}
-                  dueDate={format(new Date(followUp.dueDate), "dd-MM-yyyy")}
-                  priority={followUp.priority as "low" | "medium" | "high"}
-                  completed={followUp.completed === "true"}
-                  onToggle={() => console.log("Toggle", followUp.id)}
-                  onEdit={() => console.log("Edit", followUp.id)}
-                  onDelete={() => console.log("Delete", followUp.id)}
-                />
-              ))
-            )}
-          </div>
+          {followUps.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <p className="text-muted-foreground text-center max-w-md mb-4">
+                  No follow-up tasks yet. Add follow-ups to track action items for this student.
+                </p>
+                <Button 
+                  onClick={() => setIsAddFollowUpDialogOpen(true)}
+                  data-testid="button-add-first-followup"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First Follow-up
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <KanbanBoard
+              followUps={followUps}
+              onStatusChange={(followUp, newStatus) => {
+                updateFollowUp.mutate({
+                  id: followUp.id,
+                  updates: { status: newStatus },
+                });
+              }}
+              onEdit={(followUp) => {
+                // TODO: Implement edit functionality
+                console.log("Edit follow-up", followUp.id);
+              }}
+              onDelete={(followUp) => {
+                deleteFollowUp.mutate(followUp.id);
+              }}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="meetings" className="space-y-4 mt-6">
@@ -376,6 +452,13 @@ export default function StudentProfile() {
         onUpdateNotes={handleUpdateNotes}
         onUpdateStrategies={handleUpdateStrategies}
         onDelete={handleDeleteLog}
+      />
+
+      <AddFollowUpDialog
+        open={isAddFollowUpDialogOpen}
+        onOpenChange={setIsAddFollowUpDialogOpen}
+        onSubmit={async (data) => createFollowUp.mutate(data)}
+        isPending={createFollowUp.isPending}
       />
     </div>
   );

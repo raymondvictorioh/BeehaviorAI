@@ -70,6 +70,7 @@ export interface IStorage {
   getAllFollowUps(organizationId: string): Promise<FollowUp[]>;
   createFollowUp(followUp: InsertFollowUp): Promise<FollowUp>;
   updateFollowUp(id: string, organizationId: string, followUp: Partial<InsertFollowUp>): Promise<FollowUp>;
+  deleteFollowUp(id: string, organizationId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -135,9 +136,9 @@ export class DatabaseStorage implements IStorage {
     const totalStudents = studentsData.length;
     const totalBehaviorLogs = behaviorLogsData.length;
     
-    // Handle string "false" - completed field is stored as varchar
+    // Count follow-ups that are not Done or Archived
     const pendingFollowUps = followUpsData.filter(fu => 
-      fu.completed !== "true"
+      fu.status !== "Done" && fu.status !== "Archived"
     ).length;
     
     // Category is stored as varchar, ensure exact match
@@ -300,6 +301,12 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(followUps.id, id), eq(followUps.organizationId, organizationId)))
       .returning();
     return updated;
+  }
+
+  async deleteFollowUp(id: string, organizationId: string): Promise<void> {
+    await db
+      .delete(followUps)
+      .where(and(eq(followUps.id, id), eq(followUps.organizationId, organizationId)));
   }
 }
 
