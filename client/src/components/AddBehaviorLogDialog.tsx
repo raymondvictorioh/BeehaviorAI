@@ -25,12 +25,17 @@ interface AddBehaviorLogDialogProps {
   onSubmit?: (data: { date: string; category: string; notes: string }) => void;
 }
 
+const getTodayDate = () => {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+};
+
 export function AddBehaviorLogDialog({
   open,
   onOpenChange,
   onSubmit,
 }: AddBehaviorLogDialogProps) {
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(getTodayDate());
   const [category, setCategory] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -38,7 +43,7 @@ export function AddBehaviorLogDialog({
     e.preventDefault();
     console.log("Submitting behavior log:", { date, category, notes });
     onSubmit?.({ date, category, notes });
-    setDate("");
+    setDate(getTodayDate());
     setCategory("");
     setNotes("");
     onOpenChange(false);
