@@ -276,7 +276,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/organizations/:orgId/follow-ups/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, id } = req.params;
-      const updatedFollowUp = await storage.updateFollowUp(id, orgId, req.body);
+      
+      // Prepare update data with proper date formatting
+      const updateData: any = { ...req.body };
+      
+      // Convert dueDate string to Date object if provided
+      if (updateData.dueDate) {
+        updateData.dueDate = new Date(updateData.dueDate);
+      }
+      
+      const updatedFollowUp = await storage.updateFollowUp(id, orgId, updateData);
       res.json(updatedFollowUp);
     } catch (error) {
       console.error("Error updating follow-up:", error);
