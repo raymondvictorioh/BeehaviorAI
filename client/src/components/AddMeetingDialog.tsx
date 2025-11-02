@@ -40,32 +40,84 @@ interface AddMeetingDialogProps {
   isPending?: boolean;
 }
 
-// Waveform animation component
-function Waveform({ isRecording }: { isRecording: boolean }) {
-  const [animationTime, setAnimationTime] = useState(0);
+// Waveform animation component with real-time audio visualization
+function Waveform({ isRecording, audioStream }: { isRecording: boolean; audioStream: MediaStream | null }) {
+  const [audioData, setAudioData] = useState<number[]>(Array(20).fill(0));
+  const animationFrameRef = useRef<number | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
-    if (!isRecording) return;
-    
-    const interval = setInterval(() => {
-      setAnimationTime((prev) => prev + 1);
-    }, 100);
+    if (!isRecording || !audioStream) {
+      // Reset to default when not recording
+      setAudioData(Array(20).fill(0));
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+      }
+      return;
+    }
 
-    return () => clearInterval(interval);
-  }, [isRecording]);
+    // Create AudioContext and AnalyserNode for real-time audio analysis
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 32; // Smaller FFT size for faster updates
+    analyser.smoothingTimeConstant = 0.8; // Smooth transitions
+    
+    const source = audioContext.createMediaStreamSource(audioStream);
+    source.connect(analyser);
+    
+    audioContextRef.current = audioContext;
+    analyserRef.current = analyser;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    const updateWaveform = () => {
+      if (!analyserRef.current) return;
+      
+      analyserRef.current.getByteFrequencyData(dataArray);
+      
+      // Convert frequency data to bar heights (20 bars)
+      const barCount = 20;
+      const samplesPerBar = Math.floor(dataArray.length / barCount);
+      const newAudioData: number[] = [];
+      
+      for (let i = 0; i < barCount; i++) {
+        let sum = 0;
+        for (let j = 0; j < samplesPerBar; j++) {
+          sum += dataArray[i * samplesPerBar + j] || 0;
+        }
+        // Normalize to 0-100% (dataArray values are 0-255)
+        const average = sum / samplesPerBar;
+        newAudioData.push((average / 255) * 100);
+      }
+      
+      setAudioData(newAudioData);
+      animationFrameRef.current = requestAnimationFrame(updateWaveform);
+    };
+
+    updateWaveform();
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+      }
+    };
+  }, [isRecording, audioStream]);
 
   return (
     <div className="flex items-center gap-0.5 h-6">
-      {[...Array(20)].map((_, i) => {
-        const height = isRecording
-          ? `${20 + Math.sin(animationTime * 0.1 + i * 0.3) * 15}%`
-          : "20%";
+      {audioData.map((height, i) => {
+        // Minimum height for visibility, scale up the visual impact
+        const barHeight = Math.max(10, height * 0.8 + 10); // Scale 0-100% to 10-90%
         return (
           <div
             key={i}
-            className="w-0.5 bg-primary rounded-full transition-all duration-200"
+            className="w-0.5 bg-primary rounded-full transition-all duration-75"
             style={{
-              height: isRecording ? height : "20%",
+              height: `${barHeight}%`,
               minHeight: "4px",
             }}
           />
@@ -158,6 +210,8 @@ export function AddMeetingDialog({
   // Send audio chunk to Whisper API
   const transcribeChunk = async (audioBlob: Blob, timestamp: Date) => {
     try {
+      console.log(`Transcribing chunk: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+      
       // Convert blob to base64 (properly handle binary data)
       const arrayBuffer = await audioBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -169,6 +223,11 @@ export function AddMeetingDialog({
       }
       const base64Audio = btoa(binaryString);
 
+      // Determine file extension from blob type
+      let extension = "webm";
+      if (audioBlob.type.includes("ogg")) extension = "ogg";
+      else if (audioBlob.type.includes("mp4")) extension = "m4a";
+
       const response = await fetch("/api/transcribe", {
         method: "POST",
         headers: {
@@ -177,44 +236,60 @@ export function AddMeetingDialog({
         credentials: "include",
         body: JSON.stringify({
           audio: base64Audio,
-          filename: `chunk-${Date.now()}.webm`,
+          filename: `chunk-${Date.now()}.${extension}`,
         }),
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Transcription API error: ${response.status} ${response.statusText}`, errorText);
         throw new Error(`Transcription failed: ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log("Transcription response:", data);
       
-      // Only add entry if there's actual text
+      // Only add entry if there's actual text (filter out empty or very short transcriptions)
       if (data.text && data.text.trim().length > 0) {
-        // Add to transcript entries with timestamp and speaker
-        const entry = {
-          timestamp: format(timestamp, "HH:mm:ss"),
-          speaker: `Speaker ${speakerCountRef.current}`,
-          text: data.text.trim(),
-        };
+        // Remove common filler words and very short phrases that are likely noise
+        const cleanedText = data.text.trim();
+        
+        // Only add if text seems meaningful (more than 2 characters and not just punctuation)
+        if (cleanedText.length > 2 && /[a-zA-Z]/.test(cleanedText)) {
+          // Add to transcript entries with timestamp and speaker
+          const entry = {
+            timestamp: format(timestamp, "HH:mm:ss"),
+            speaker: `Speaker ${speakerCountRef.current}`,
+            text: cleanedText,
+          };
 
-        setTranscriptEntries((prev) => {
-          const updated = [...prev, entry];
-          
-          // Update full transcript content
-          const fullContent = updated.map(e => `[${e.timestamp}] ${e.speaker}: ${e.text}`).join('\n\n');
-          setTranscriptContent(fullContent);
-          
-          // Auto-save to form
-          form.setValue("transcript", fullContent);
-          
-          return updated;
-        });
+          setTranscriptEntries((prev) => {
+            const updated = [...prev, entry];
+            
+            // Update full transcript content - simple format with timestamps
+            const fullContent = updated.map(e => `[${e.timestamp}] ${e.speaker}: ${e.text}`).join('\n\n');
+            
+            setTranscriptContent(fullContent);
+            
+            // Auto-save to form
+            form.setValue("transcript", fullContent);
+            
+            return updated;
+          });
+        } else {
+          console.log("Skipping transcription - text too short or meaningless:", cleanedText);
+        }
+      } else {
+        console.log("Empty transcription received");
       }
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Transcription error:", error);
-      // Store chunk for retry
-      pendingChunksRef.current.push({ blob: audioBlob, timestamp });
+      // Store chunk for retry only if it's a network/server error
+      if (error.message && !error.message.includes("Invalid")) {
+        pendingChunksRef.current.push({ blob: audioBlob, timestamp });
+      }
       return false;
     }
   };
@@ -264,15 +339,26 @@ export function AddMeetingDialog({
     setIsRecording(false);
     setIsProcessing(true);
 
-    // Process any remaining chunks
+    console.log("Stopping recording, processing final chunks...");
+
+    // Wait a moment for any pending ondataavailable events
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Process any remaining chunks from the recorder
     if (audioChunksRef.current.length > 0) {
-      const finalBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-      await transcribeChunk(finalBlob, new Date());
+      console.log(`Processing ${audioChunksRef.current.length} remaining chunks`);
+      const finalBlob = new Blob(audioChunksRef.current, { 
+        type: mediaRecorderRef.current?.mimeType || "audio/webm" 
+      });
+      if (finalBlob.size > 1024) {
+        await transcribeChunk(finalBlob, new Date());
+      }
       audioChunksRef.current = [];
     }
 
-    // Retry any pending chunks
+    // Retry any pending chunks that failed
     if (pendingChunksRef.current.length > 0) {
+      console.log(`Retrying ${pendingChunksRef.current.length} failed chunks`);
       await retryPendingChunks();
     }
 
@@ -299,53 +385,79 @@ export function AddMeetingDialog({
           sampleRate: 16000, // Whisper works best with 16kHz
           echoCancellation: true,
           noiseSuppression: true,
+          autoGainControl: true,
         }
       });
 
+      console.log("Microphone access granted, stream active:", stream.active);
       audioStreamRef.current = stream;
 
-      // Create MediaRecorder
+      // Check for supported MIME types
+      const mimeTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/mp4",
+      ];
+      
+      let selectedMimeType = "audio/webm";
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          console.log("Selected audio format:", selectedMimeType);
+          break;
+        }
+      }
+
+      // Create MediaRecorder with supported format
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm",
+        mimeType: selectedMimeType,
       });
 
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
-      // Collect audio chunks
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+      // Handle errors
+      mediaRecorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event);
+      };
+
+      // Collect and immediately transcribe audio chunks
+      mediaRecorder.ondataavailable = async (event) => {
+        if (event.data && event.data.size > 0) {
+          console.log(`Audio chunk received: ${event.data.size} bytes`);
           
-          // Send chunk for transcription every 5 seconds
-          if (audioChunksRef.current.length >= 5) {
-            const chunkBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-            transcribeChunk(chunkBlob, new Date());
-            audioChunksRef.current = []; // Clear processed chunks
+          // Immediately send chunk for transcription (don't accumulate)
+          const chunkBlob = new Blob([event.data], { type: selectedMimeType });
+          
+          // Only transcribe if chunk is large enough (at least 1KB to avoid empty chunks)
+          if (chunkBlob.size > 1024) {
+            transcribeChunk(chunkBlob, new Date()).catch((error) => {
+              console.error("Error transcribing chunk:", error);
+            });
+          } else {
+            console.log("Chunk too small, skipping transcription");
           }
         }
       };
 
-      // Start recording with 5-second chunks
-      mediaRecorder.start(5000); // Get data every 5 seconds
+      // Start recording with 3-second chunks for more responsive transcription
+      // Whisper API works well with chunks as small as 0.1 seconds, but 3 seconds gives better context
+      const chunkInterval = 3000; // 3 seconds
+      mediaRecorder.start(chunkInterval);
+      console.log(`Recording started with ${chunkInterval}ms intervals`);
 
       setIsRecording(true);
       setTranscriptContent("");
       setTranscriptEntries([]);
       speakerCountRef.current = 1;
 
-      // Periodic transcription of accumulated chunks
-      recordingIntervalRef.current = setInterval(async () => {
-        if (audioChunksRef.current.length > 0 && !isProcessing) {
-          const chunkBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-          await transcribeChunk(chunkBlob, new Date());
-          audioChunksRef.current = [];
-        }
-      }, 5000); // Process every 5 seconds
+      // Add initial feedback message
+      setTranscriptContent("Listening... Speak now.");
 
     } catch (error: any) {
       console.error("Error starting recording:", error);
-      alert(`Failed to start recording: ${error.message}. Please grant microphone permissions.`);
+      alert(`Failed to start recording: ${error.message}. Please grant microphone permissions and ensure your microphone is working.`);
       setIsRecording(false);
     }
   };
@@ -574,7 +686,7 @@ export function AddMeetingDialog({
             </Button>
                 {isRecording && (
               <div className="flex items-center gap-3">
-                <Waveform isRecording={isRecording} />
+                <Waveform isRecording={isRecording} audioStream={audioStreamRef.current} />
                 <span className="text-sm text-muted-foreground animate-pulse">Recording...</span>
               </div>
             )}

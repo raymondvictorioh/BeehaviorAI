@@ -353,6 +353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/transcribe", isAuthenticated, async (req, res) => {
     try {
       if (!req.body.audio) {
+        console.error("Transcription request missing audio data");
         return res.status(400).json({ error: "Audio data is required" });
       }
 
@@ -360,13 +361,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const audioBuffer = Buffer.from(req.body.audio, 'base64');
       
       if (audioBuffer.length === 0) {
+        console.error("Transcription request with empty audio buffer");
         return res.status(400).json({ error: "Invalid audio data" });
       }
+
+      // Check file size limit (Whisper API limit is 25MB)
+      const maxSize = 25 * 1024 * 1024; // 25MB
+      if (audioBuffer.length > maxSize) {
+        console.error(`Audio file too large: ${audioBuffer.length} bytes (max: ${maxSize})`);
+        return res.status(400).json({ error: "Audio file too large. Maximum size is 25MB." });
+      }
+
+      console.log(`Transcribing audio: ${audioBuffer.length} bytes, filename: ${req.body.filename || "audio.webm"}`);
 
       const transcription = await transcribeAudio(
         audioBuffer,
         req.body.filename || "audio.webm"
       );
+
+      console.log(`Transcription successful: ${transcription.text?.length || 0} characters`);
 
       res.json({
         text: transcription.text,
@@ -375,7 +388,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Error in transcription:", error);
-      res.status(500).json({ error: "Failed to transcribe audio", message: error.message });
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to transcribe audio";
+      if (error.message?.includes("API key")) {
+        errorMessage = "OpenAI API key is missing or invalid. Please check your OPENAI_API_KEY environment variable.";
+      } else if (error.message?.includes("timeout")) {
+        errorMessage = "Transcription request timed out. Please try again.";
+      } else if (error.message?.includes("rate limit")) {
+        errorMessage = "OpenAI API rate limit exceeded. Please wait a moment and try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      res.status(500).json({ 
+        error: errorMessage,
+        message: error.message,
+      });
     }
   });
 

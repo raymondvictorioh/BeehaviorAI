@@ -45,14 +45,30 @@ export async function transcribeAudio(audioBuffer: Buffer, filename: string = "a
   segments?: Array<{ start: number; end: number; text: string }>;
 }> {
   try {
+    // Validate API key
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY environment variable is not set");
+    }
+
+    // Validate audio buffer
+    if (!audioBuffer || audioBuffer.length === 0) {
+      throw new Error("Audio buffer is empty");
+    }
+
+    // Determine MIME type from filename
+    let mimeType = "audio/webm";
+    if (filename.endsWith('.mp3')) mimeType = "audio/mpeg";
+    else if (filename.endsWith('.m4a') || filename.endsWith('.mp4')) mimeType = "audio/mp4";
+    else if (filename.endsWith('.ogg')) mimeType = "audio/ogg";
+    else if (filename.endsWith('.wav')) mimeType = "audio/wav";
+
+    console.log(`Creating File object: ${filename}, type: ${mimeType}, size: ${audioBuffer.length} bytes`);
+
     // Create a File-like object from Buffer for OpenAI SDK
     // Node.js 18+ supports File and Blob natively
-    const audioFile = new File([audioBuffer], filename, { 
-      type: filename.endsWith('.webm') ? "audio/webm" : 
-            filename.endsWith('.mp3') ? "audio/mpeg" :
-            filename.endsWith('.m4a') ? "audio/mp4" :
-            "audio/webm"
-    });
+    const audioFile = new File([audioBuffer], filename, { type: mimeType });
+    
+    console.log("Calling OpenAI Whisper API...");
     
     const transcription = await openai.audio.transcriptions.create({
       file: audioFile,
@@ -64,13 +80,28 @@ export async function transcribeAudio(audioBuffer: Buffer, filename: string = "a
     // Type assertion for verbose_json response which includes segments
     const verboseResponse = transcription as any;
 
-    return {
+    const result = {
       text: transcription.text || "",
       language: transcription.language,
       segments: verboseResponse.segments || [], // Whisper segments with timestamps
     };
+
+    console.log(`Whisper transcription completed: ${result.text.length} characters, ${result.segments.length} segments`);
+
+    return result;
   } catch (error: any) {
-    console.error("Whisper API error:", error);
+    console.error("Whisper API error details:", {
+      message: error.message,
+      status: error.status,
+      response: error.response?.data,
+      name: error.name,
+    });
+    
+    // Re-throw with more context
+    if (error.response?.data) {
+      throw new Error(`OpenAI API error: ${JSON.stringify(error.response.data)}`);
+    }
+    
     const errorMessage = error?.message || "Unknown error";
     throw new Error(`Failed to transcribe audio: ${errorMessage}`);
   }
