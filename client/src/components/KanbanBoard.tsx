@@ -4,7 +4,8 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, Calendar, X } from "lucide-react";
+import { format, addDays } from "date-fns";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +42,55 @@ const statusColumns = [
   { id: "Archived", label: "Archived", color: "bg-gray-50 dark:bg-gray-900" },
 ];
 
+// Helper function to determine due date status
+function getDueDateStatus(dueDate: Date | string | null): 'past' | 'near' | 'normal' | null {
+  if (!dueDate) return null;
+  
+  const due = typeof dueDate === 'string' ? new Date(dueDate) : dueDate;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDateOnly = new Date(due);
+  dueDateOnly.setHours(0, 0, 0, 0);
+  
+  // Check if past (excluding today)
+  if (dueDateOnly.getTime() < today.getTime()) {
+    return 'past';
+  }
+  
+  // Check if within 1 week (including today)
+  const oneWeekFromNow = addDays(today, 7);
+  if (dueDateOnly.getTime() <= oneWeekFromNow.getTime()) {
+    return 'near';
+  }
+  
+  return 'normal';
+}
+
+// Helper function to format due date display text
+function formatDueDateText(dueDate: Date | string | null): string {
+  if (!dueDate) return "";
+  
+  const due = typeof dueDate === 'string' ? new Date(dueDate) : dueDate;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDateOnly = new Date(due);
+  dueDateOnly.setHours(0, 0, 0, 0);
+  
+  // Check if it's tomorrow
+  const tomorrow = addDays(today, 1);
+  if (dueDateOnly.getTime() === tomorrow.getTime()) {
+    return "Tomorrow";
+  }
+  
+  // Check if it's today
+  if (dueDateOnly.getTime() === today.getTime()) {
+    return "Today";
+  }
+  
+  // Otherwise format as "MMM d"
+  return format(due, "MMM d");
+}
+
 // Draggable Follow-up Card Component
 function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange }: {
   followUp: FollowUp;
@@ -48,6 +98,7 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange }: {
   onDelete?: (followUp: FollowUp) => void;
   onStatusChange?: (followUp: FollowUp, newStatus: string) => void;
 }) {
+  const dueDateStatus = getDueDateStatus(followUp.dueDate);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: followUp.id,
     data: {
@@ -119,21 +170,51 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange }: {
               <CardTitle className="text-sm font-medium line-clamp-2 mb-2">
                 {followUp.title}
               </CardTitle>
-              {followUp.assignee && (
-                <div className="flex items-center gap-1.5" data-testid={`assignee-${followUp.id}`}>
-                  <Avatar className="h-5 w-5">
-                    <AvatarFallback className="text-[10px] leading-none">
-                      {followUp.assignee
-                        .split(' ')
-                        .map(n => n[0])
-                        .join('')
-                        .toUpperCase()
-                        .slice(0, 2)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-xs text-muted-foreground">{followUp.assignee}</span>
-                </div>
-              )}
+              <div className="flex flex-col gap-1.5">
+                {followUp.assignee && (
+                  <div className="flex items-center gap-1.5" data-testid={`assignee-${followUp.id}`}>
+                    <Avatar className="h-5 w-5">
+                      <AvatarFallback className="text-[10px] leading-none">
+                        {followUp.assignee
+                          .split(' ')
+                          .map(n => n[0])
+                          .join('')
+                          .toUpperCase()
+                          .slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-xs text-muted-foreground">{followUp.assignee}</span>
+                  </div>
+                )}
+                {followUp.dueDate && (
+                  <div 
+                    className="flex items-center gap-1.5" 
+                    data-testid={`due-date-${followUp.id}`}
+                  >
+                    {dueDateStatus === 'past' ? (
+                      <div className="relative">
+                        <Calendar className="h-3.5 w-3.5 text-red-500" />
+                        <X className="h-2.5 w-2.5 text-white absolute -top-0.5 -right-0.5 bg-red-500 rounded-full p-0.5" />
+                      </div>
+                    ) : dueDateStatus === 'near' ? (
+                      <Calendar className="h-3.5 w-3.5 text-orange-500" />
+                    ) : (
+                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                    <span 
+                      className={`text-xs ${
+                        dueDateStatus === 'past' 
+                          ? 'text-red-600 dark:text-red-400' 
+                          : dueDateStatus === 'near' 
+                          ? 'text-orange-600 dark:text-orange-400'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {formatDueDateText(followUp.dueDate)}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -315,21 +396,51 @@ export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange }: Kan
                 <CardTitle className="text-sm font-medium line-clamp-2 mb-2">
                   {activeFollowUp.title}
                 </CardTitle>
-                {activeFollowUp.assignee && (
-                  <div className="flex items-center gap-1.5">
-                    <Avatar className="h-5 w-5">
-                      <AvatarFallback className="text-[10px] leading-none">
-                        {activeFollowUp.assignee
-                          .split(' ')
-                          .map(n => n[0])
-                          .join('')
-                          .toUpperCase()
-                          .slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-xs text-muted-foreground">{activeFollowUp.assignee}</span>
-                  </div>
-                )}
+                <div className="flex flex-col gap-1.5">
+                  {activeFollowUp.assignee && (
+                    <div className="flex items-center gap-1.5">
+                      <Avatar className="h-5 w-5">
+                        <AvatarFallback className="text-[10px] leading-none">
+                          {activeFollowUp.assignee
+                            .split(' ')
+                            .map(n => n[0])
+                            .join('')
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs text-muted-foreground">{activeFollowUp.assignee}</span>
+                    </div>
+                  )}
+                  {activeFollowUp.dueDate && (
+                    <div className="flex items-center gap-1.5">
+                      {(() => {
+                        const status = getDueDateStatus(activeFollowUp.dueDate);
+                        return status === 'past' ? (
+                          <div className="relative">
+                            <Calendar className="h-3.5 w-3.5 text-red-500" />
+                            <X className="h-2.5 w-2.5 text-white absolute -top-0.5 -right-0.5 bg-red-500 rounded-full p-0.5" />
+                          </div>
+                        ) : status === 'near' ? (
+                          <Calendar className="h-3.5 w-3.5 text-orange-500" />
+                        ) : (
+                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                        );
+                      })()}
+                      <span 
+                        className={`text-xs ${
+                          getDueDateStatus(activeFollowUp.dueDate) === 'past' 
+                            ? 'text-red-600 dark:text-red-400' 
+                            : getDueDateStatus(activeFollowUp.dueDate) === 'near' 
+                            ? 'text-orange-600 dark:text-orange-400'
+                            : 'text-muted-foreground'
+                        }`}
+                      >
+                        {formatDueDateText(activeFollowUp.dueDate)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </CardHeader>
             </Card>
           </div>

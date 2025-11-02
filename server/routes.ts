@@ -277,19 +277,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { orgId, id } = req.params;
       
-      // Prepare update data with proper date formatting
-      const updateData: any = { ...req.body };
+      // Prepare update data with proper date formatting (same format as create)
+      const updateData: any = {
+        title: req.body.title,
+        description: req.body.description || null,
+        status: req.body.status || "To-Do",
+        assignee: req.body.assignee || null,
+      };
       
-      // Convert dueDate string to Date object if provided
-      if (updateData.dueDate) {
-        updateData.dueDate = new Date(updateData.dueDate);
+      // Convert dueDate string to Date object if provided (same logic as create)
+      if (req.body.dueDate) {
+        updateData.dueDate = new Date(req.body.dueDate);
+      } else {
+        updateData.dueDate = null;
       }
+      
+      // Remove fields with empty strings (same as create)
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === "" || updateData[key] === undefined) {
+          updateData[key] = null;
+        }
+      });
+      
+      // Remove fields that shouldn't be updated
+      delete updateData.organizationId;
+      delete updateData.studentId;
+      delete updateData.id;
       
       const updatedFollowUp = await storage.updateFollowUp(id, orgId, updateData);
       res.json(updatedFollowUp);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating follow-up:", error);
-      res.status(500).json({ message: "Failed to update follow-up" });
+      
+      // Provide more detailed error messages
+      if (error.code === "23503") {
+        res.status(400).json({ message: "Invalid organization or follow-up ID" });
+      } else if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to update follow-up", error: error.message });
+      }
     }
   });
 
