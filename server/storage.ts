@@ -142,8 +142,17 @@ export class DatabaseStorage implements IStorage {
 
   async getDashboardStats(organizationId: string): Promise<DashboardStats> {
     const studentsData = await db.select().from(students).where(eq(students.organizationId, organizationId));
-    const behaviorLogsData = await db.select().from(behaviorLogs).where(eq(behaviorLogs.organizationId, organizationId));
     const followUpsData = await db.select().from(followUps).where(eq(followUps.organizationId, organizationId));
+    
+    // Get behavior logs with category information
+    const behaviorLogsData = await db
+      .select({
+        id: behaviorLogs.id,
+        categoryName: behaviorLogCategories.name,
+      })
+      .from(behaviorLogs)
+      .innerJoin(behaviorLogCategories, eq(behaviorLogs.categoryId, behaviorLogCategories.id))
+      .where(eq(behaviorLogs.organizationId, organizationId));
 
     const totalStudents = studentsData.length;
     const totalBehaviorLogs = behaviorLogsData.length;
@@ -153,9 +162,9 @@ export class DatabaseStorage implements IStorage {
       fu.status !== "Done" && fu.status !== "Archived"
     ).length;
     
-    // Category is stored as varchar, ensure exact match
+    // Count positive logs by joining with categories
     const positiveLogs = behaviorLogsData.filter(log => 
-      log.category?.toLowerCase() === "positive"
+      log.categoryName?.toLowerCase() === "positive"
     ).length;
     const positiveLogsPercentage = totalBehaviorLogs > 0 
       ? Math.round((positiveLogs / totalBehaviorLogs) * 100) 

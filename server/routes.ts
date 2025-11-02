@@ -150,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const log = await storage.createBehaviorLog({
         organizationId: orgId,
         studentId,
-        category: req.body.category,
+        categoryId: req.body.categoryId,
         notes: req.body.notes,
         incidentDate: req.body.incidentDate ? new Date(req.body.incidentDate) : new Date(),
         loggedBy: req.body.loggedBy || "Unknown",
@@ -219,6 +219,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error creating meeting note:", error);
       res.status(500).json({ message: "Failed to create meeting note", error: error.message });
+    }
+  });
+
+  // Behavior Log Category routes
+  app.get("/api/organizations/:orgId/categories", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const categories = await storage.getBehaviorLogCategories(orgId);
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ message: "Failed to fetch categories" });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/categories", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const category = await storage.createBehaviorLogCategory({
+        organizationId: orgId,
+        name: req.body.name,
+        description: req.body.description || null,
+        color: req.body.color || null,
+        displayOrder: req.body.displayOrder ?? 999,
+      });
+      res.json(category);
+    } catch (error) {
+      console.error("Error creating category:", error);
+      res.status(500).json({ message: "Failed to create category" });
+    }
+  });
+
+  app.patch("/api/organizations/:orgId/categories/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const category = await storage.updateBehaviorLogCategory(id, orgId, req.body);
+      res.json(category);
+    } catch (error) {
+      console.error("Error updating category:", error);
+      res.status(500).json({ message: "Failed to update category" });
+    }
+  });
+
+  app.delete("/api/organizations/:orgId/categories/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      await storage.deleteBehaviorLogCategory(id, orgId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      res.status(500).json({ message: "Failed to delete category" });
     }
   });
 
