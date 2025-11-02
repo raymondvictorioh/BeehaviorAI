@@ -39,6 +39,47 @@ Remember: You're helping educators support students effectively.`,
   }
 }
 
+export async function generateMeetingSummary(notes: string, transcript: string): Promise<string> {
+  try {
+    const prompt = `You are an AI assistant helping to summarize a school meeting about student behavior. Based on the following notes and transcript, create a comprehensive, well-structured summary that captures:
+
+1. Key discussion points
+2. Important decisions made
+3. Action items and next steps
+4. Concerns raised
+5. Positive observations
+
+Meeting Notes:
+${notes || "No notes provided"}
+
+Meeting Transcript:
+${transcript || "No transcript available"}
+
+Please provide a clear, professional summary that would be useful for teachers and administrators reviewing this meeting later.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert at summarizing educational meetings about student behavior. Create concise, actionable summaries that highlight key points, decisions, and follow-up actions."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_completion_tokens: 1500,
+      temperature: 0.7,
+    });
+
+    return response.choices[0].message.content || "Unable to generate summary.";
+  } catch (error) {
+    console.error("OpenAI summary generation error:", error);
+    throw new Error("Failed to generate meeting summary");
+  }
+}
+
 export async function transcribeAudio(audioBuffer: Buffer, filename: string = "audio.webm"): Promise<{
   text: string;
   language?: string;

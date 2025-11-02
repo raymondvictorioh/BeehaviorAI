@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RichTextEditor } from "./RichTextEditor";
-import { Calendar, Mic, Square, User } from "lucide-react";
+import { Calendar, Mic, Square, User, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 const formSchema = z.object({
@@ -144,6 +144,8 @@ export function AddMeetingDialog({
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [participants, setParticipants] = useState<string[]>(["Me"]);
+  const [aiSummary, setAiSummary] = useState("");
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   
   // Recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -196,6 +198,8 @@ export function AddMeetingDialog({
       setParticipants(["Me"]);
       setIsRecording(false);
       setIsProcessing(false);
+      setAiSummary("");
+      setIsGeneratingSummary(false);
       speakerCountRef.current = 1;
       audioChunksRef.current = [];
       pendingChunksRef.current = [];
@@ -206,6 +210,40 @@ export function AddMeetingDialog({
       cleanupRecording();
     };
   }, [open, form, cleanupRecording]);
+
+  // Generate AI summary from notes and transcript
+  const generateSummary = async () => {
+    if (!notesContent && !transcriptContent) {
+      alert("Please add notes or transcript before generating a summary.");
+      return;
+    }
+
+    setIsGeneratingSummary(true);
+    try {
+      const response = await fetch("/api/generate-meeting-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          notes: notesContent,
+          transcript: transcriptContent,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to generate summary");
+      }
+
+      const data = await response.json();
+      setAiSummary(data.summary);
+    } catch (error: any) {
+      console.error("Error generating summary:", error);
+      alert(`Failed to generate summary: ${error.message}`);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
 
   // Send audio chunk to Whisper API
   const transcribeChunk = async (audioBlob: Blob, timestamp: Date) => {
@@ -596,9 +634,10 @@ export function AddMeetingDialog({
 
               {/* Tabs Section */}
               <Tabs defaultValue="notes" className="w-full">
-                <TabsList className="grid w-full max-w-md grid-cols-2">
+                <TabsList className={`grid w-full max-w-md ${aiSummary ? 'grid-cols-3' : 'grid-cols-2'}`}>
                   <TabsTrigger value="notes">Notes</TabsTrigger>
                   <TabsTrigger value="transcript">Transcript</TabsTrigger>
+                  {aiSummary && <TabsTrigger value="summary">Summary</TabsTrigger>}
                 </TabsList>
 
                 <TabsContent value="notes" className="mt-6">
@@ -667,6 +706,23 @@ export function AddMeetingDialog({
                     )}
                   </div>
                 </TabsContent>
+
+                {/* Summary Tab - Only shown after summary is generated */}
+                {aiSummary && (
+                  <TabsContent value="summary" className="mt-6">
+                    <div className="border rounded-lg p-6 min-h-[400px] bg-muted/20">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        <h3 className="font-semibold text-lg">AI-Generated Summary</h3>
+                      </div>
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <p className="whitespace-pre-wrap text-foreground leading-relaxed">
+                          {aiSummary}
+                        </p>
+                      </div>
+                    </div>
+                  </TabsContent>
+                )}
               </Tabs>
             </div>
 
@@ -679,6 +735,7 @@ export function AddMeetingDialog({
               variant={isRecording ? "destructive" : "default"}
               size="lg"
               className="rounded-full h-14 w-14 p-0 shadow-lg hover:scale-105 transition-transform"
+              data-testid="button-record"
             >
               {isRecording ? (
                 <Square className="h-6 w-6" />
@@ -691,6 +748,19 @@ export function AddMeetingDialog({
                 <Waveform isRecording={isRecording} audioStream={audioStreamRef.current} />
                 <span className="text-sm text-muted-foreground animate-pulse">Recording...</span>
               </div>
+            )}
+            {!isRecording && !aiSummary && (notesContent || transcriptContent) && (
+              <Button
+                type="button"
+                onClick={generateSummary}
+                disabled={isGeneratingSummary}
+                variant="outline"
+                className="gap-2"
+                data-testid="button-generate-summary"
+              >
+                <Sparkles className="h-4 w-4" />
+                {isGeneratingSummary ? "Generating..." : "Generate Summary"}
+              </Button>
             )}
           </div>
 

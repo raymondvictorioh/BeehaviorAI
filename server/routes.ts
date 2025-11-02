@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, checkOrganizationAccess } from "./replitAuth";
-import { getChatCompletion, transcribeAudio } from "./openai";
+import { getChatCompletion, transcribeAudio, generateMeetingSummary } from "./openai";
 import { insertFollowUpSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -534,6 +534,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         errorMessage = "Transcription request timed out. Please try again.";
       } else if (error.message?.includes("rate limit")) {
         errorMessage = "OpenAI API rate limit exceeded. Please wait a moment and try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      res.status(500).json({ 
+        error: errorMessage,
+        message: error.message,
+      });
+    }
+  });
+
+  // Meeting summary generation endpoint
+  app.post("/api/generate-meeting-summary", isAuthenticated, async (req, res) => {
+    try {
+      const { notes, transcript } = req.body;
+
+      if (!notes && !transcript) {
+        return res.status(400).json({ 
+          error: "At least notes or transcript is required to generate a summary" 
+        });
+      }
+
+      console.log("Generating meeting summary...");
+      const summary = await generateMeetingSummary(notes || "", transcript || "");
+      
+      console.log("Meeting summary generated successfully");
+      res.json({ summary });
+    } catch (error: any) {
+      console.error("Error generating meeting summary:", error);
+      
+      let errorMessage = "Failed to generate meeting summary";
+      if (error.message?.includes("API key")) {
+        errorMessage = "OpenAI API key is missing or invalid.";
       } else if (error.message) {
         errorMessage = error.message;
       }
