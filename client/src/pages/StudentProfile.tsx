@@ -61,7 +61,7 @@ export default function StudentProfile() {
 
   // Fetch behavior log categories
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery<BehaviorLogCategory[]>({
-    queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
+    queryKey: ["/api/organizations", orgId, "categories"],
     enabled: !!orgId,
   });
 
@@ -70,15 +70,12 @@ export default function StudentProfile() {
   // Create behavior log mutation with optimistic updates
   const createBehaviorLog = useMutation({
     mutationFn: async (data: { date: string; category: string; notes: string }) => {
-      // Find category name from ID (data.category is the category ID)
-      const selectedCategory = categories.find(cat => cat.id === data.category);
-      const categoryName = selectedCategory?.name || data.category; // Fallback to ID if not found
-      
+      // data.category contains the category ID
       const response = await fetch(`/api/organizations/${orgId}/students/${studentId}/behavior-logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          category: categoryName.toLowerCase(), // Store name in lowercase for consistency
+          categoryId: data.category, // Send category ID
           notes: data.notes,
           incidentDate: new Date(data.date).toISOString(),
           loggedBy: user?.email || "Unknown",
@@ -102,16 +99,12 @@ export default function StudentProfile() {
         "behavior-logs",
       ]);
 
-      // Find category name from ID
-      const selectedCategory = categories.find(cat => cat.id === newLog.category);
-      const categoryName = selectedCategory?.name?.toLowerCase() || newLog.category;
-
       const tempId = `temp-${Date.now()}`;
       const optimisticLog: BehaviorLog = {
         id: tempId,
         organizationId: orgId!,
         studentId: studentId!,
-        category: categoryName,
+        categoryId: newLog.category, // newLog.category contains the category ID
         notes: newLog.notes,
         incidentDate: new Date(newLog.date),
         loggedBy: user?.email || "Unknown",
@@ -707,16 +700,20 @@ export default function StudentProfile() {
                 </CardContent>
               </Card>
             ) : (
-              behaviorLogs.map((log) => (
-                <BehaviorLogEntry
-                  key={log.id}
-                  id={log.id}
-                  date={log.incidentDate ? format(new Date(log.incidentDate), "dd-MM-yyyy") : ""}
-                  category={log.category || ""}
-                  notes={log.notes || ""}
-                  onView={() => handleViewLog(log)}
-                />
-              ))
+              behaviorLogs.map((log) => {
+                // Find category name from categoryId
+                const category = categories.find(cat => cat.id === log.categoryId);
+                return (
+                  <BehaviorLogEntry
+                    key={log.id}
+                    id={log.id}
+                    date={log.incidentDate ? format(new Date(log.incidentDate), "dd-MM-yyyy") : ""}
+                    category={category?.name || "Unknown"}
+                    notes={log.notes || ""}
+                    onView={() => handleViewLog(log)}
+                  />
+                );
+              })
             )}
           </div>
         </TabsContent>
