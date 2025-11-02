@@ -100,7 +100,12 @@ Preferred communication style: Simple, everyday language.
 - Students table: id, organization_id, name, email, class, gender, created_at, updated_at
   - Unique constraint on (organization_id, email) via "unique_email_per_org" index
   - Email uniqueness enforced per organization (students in different orgs can share emails)
-- Behavior_logs table: id, organization_id, student_id, category, notes, logged_at
+- **Behavior_log_categories table: id, organization_id, name, description (nullable), color (nullable), display_order, created_at, updated_at**
+  - **Organization-specific categories for classifying behavior logs**
+  - **4 default categories auto-seeded on organization creation: Positive (green), Neutral (blue), Concern (amber), Serious (red)**
+  - **Available colors: green, blue, amber, red, purple, pink, orange, teal, indigo**
+- Behavior_logs table: id, organization_id, student_id, **categoryId (foreign key to behavior_log_categories)**, incident_date, notes, strategies (nullable), logged_by, logged_at
+  - **Uses categoryId foreign key instead of category string for flexible, organization-specific categories**
 - Meeting_notes table: id, organization_id, student_id, date, participants, summary, full_notes
 - Follow_ups table: id, organization_id, student_id, title, description (rich text HTML), due_date (nullable), status (To-Do, In-Progress, Done, Archived), assignee (nullable), created_at, updated_at
   - **Description field stores sanitized HTML from rich text editor**
