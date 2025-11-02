@@ -11,7 +11,11 @@ BehaviorHub is a SaaS application for school behavior management, designed to he
 - Behavior log deletion with confirmation popup to prevent accidental removal
 - Consistent date formatting (dd-MM-yyyy with time) throughout the application
 - AI-generated behavior summaries using OpenAI's GPT-5 model
-- Meeting notes and follow-up task management
+- Meeting notes with real-time audio transcription (Whisper API)
+- **AI-powered meeting summary generation using GPT-5**
+- **Dynamic waveform visualization during audio recording**
+- **Conditional Summary tab that appears after AI summary generation**
+- Follow-up task management with rich text descriptions
 - **Rich text follow-up management with Kanban board view**
 - **Follow-up workflow tracking (To-Do, In-Progress, Done, Archived)**
 - **HTML sanitization for rich text content to prevent XSS attacks**
@@ -71,6 +75,8 @@ Preferred communication style: Simple, everyday language.
 - Organization endpoints: `/api/organizations`, `/api/organizations/:id/users`, `/api/organizations/:id/stats`
 - Student endpoints: `/api/organizations/:orgId/students`
 - AI assistant: `/api/assistant/chat`
+- Audio transcription: POST `/api/transcribe` (Whisper API)
+- **Meeting summary generation: POST `/api/generate-meeting-summary` (GPT-5)**
 - All organization-scoped routes protected with checkOrganizationAccess middleware
 - Session-based authentication using Replit Auth
 
@@ -129,9 +135,18 @@ Preferred communication style: Simple, everyday language.
 **AI Service:**
 - OpenAI API integration in `server/openai.ts`
 - Uses GPT-5 model (as of August 2025)
+- Uses Whisper API for real-time audio transcription
 - Requires `OPENAI_API_KEY` environment variable
-- Provides contextual assistance based on current page
-- Generates behavior summaries and answers user queries
+- **Features:**
+  - Contextual AI assistant based on current page
+  - Behavior summaries for students
+  - **Meeting summary generation from notes and transcripts**
+  - Real-time audio transcription in 3-second chunks
+- **Meeting Summary Generation:**
+  - Analyzes notes and transcripts using GPT-5
+  - Generates structured summaries with key points, action items, and recommendations
+  - Appears in conditional "Summary" tab after generation
+  - User-friendly error messages when API key is invalid/missing
 
 **Database:**
 - Neon serverless PostgreSQL (configured but may not be actively provisioned)
