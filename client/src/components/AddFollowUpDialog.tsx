@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import DOMPurify from "isomorphic-dompurify";
-import { insertFollowUpSchema } from "@shared/schema";
+import { insertFollowUpSchema, type FollowUp } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +42,7 @@ interface AddFollowUpDialogProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: FormData) => Promise<void>;
   isPending?: boolean;
+  editFollowUp?: FollowUp | null;
 }
 
 const statusOptions = [
@@ -56,8 +57,10 @@ export function AddFollowUpDialog({
   onOpenChange,
   onSubmit,
   isPending = false,
+  editFollowUp,
 }: AddFollowUpDialogProps) {
   const [description, setDescription] = useState("");
+  const isEditMode = !!editFollowUp;
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -72,17 +75,61 @@ export function AddFollowUpDialog({
     },
   });
 
+  // Populate form when editing
+  useEffect(() => {
+    if (editFollowUp && open) {
+      const descriptionValue = editFollowUp.description || "";
+      form.reset({
+        title: editFollowUp.title || "",
+        description: descriptionValue,
+        status: (editFollowUp.status as "To-Do" | "In-Progress" | "Done" | "Archived") || "To-Do",
+        assignee: editFollowUp.assignee || "",
+        dueDate: editFollowUp.dueDate ? new Date(editFollowUp.dueDate) : undefined,
+        organizationId: editFollowUp.organizationId || "",
+        studentId: editFollowUp.studentId || "",
+      });
+      // Set description state - this will update the RichTextEditor via content prop
+      setDescription(descriptionValue);
+    } else if (!open) {
+      // Reset form when dialog closes
+      form.reset({
+        title: "",
+        description: "",
+        status: "To-Do",
+        assignee: "",
+        dueDate: undefined,
+        organizationId: "",
+        studentId: "",
+      });
+      setDescription("");
+    }
+  }, [editFollowUp, open, form]);
+
   const handleSubmit = async (data: FormData) => {
     // Sanitize HTML description to prevent XSS attacks
     const sanitizedDescription = description ? DOMPurify.sanitize(description, {
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote'],
-      ALLOWED_ATTR: []
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'input'],
+      ALLOWED_ATTR: ['type', 'checked', 'data-type', 'data-checked'],
+      ALLOWED_URI_REGEXP: /^$/
     }) : "";
     
-    await onSubmit({
-      ...data,
-      description: sanitizedDescription,
+    // Prepare submit data - remove empty fields and format dates
+    const submitData: any = {
+      title: data.title,
+      description: sanitizedDescription || null,
+      status: data.status || "To-Do",
+      assignee: data.assignee || null,
+      dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+    };
+    
+    // Remove fields with empty strings
+    Object.keys(submitData).forEach(key => {
+      if (submitData[key] === "" || submitData[key] === undefined) {
+        submitData[key] = null;
+      }
     });
+    
+    await onSubmit(submitData);
     form.reset();
     setDescription("");
     onOpenChange(false);
@@ -90,9 +137,9 @@ export function AddFollowUpDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-add-followup">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={isEditMode ? "dialog-edit-followup" : "dialog-add-followup"}>
         <DialogHeader>
-          <DialogTitle>Add Follow-Up</DialogTitle>
+          <DialogTitle>{isEditMode ? "Edit Follow-Up" : "Add Follow-Up"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -131,7 +178,7 @@ export function AddFollowUpDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-status">
                           <SelectValue placeholder="Select status" />
@@ -208,7 +255,7 @@ export function AddFollowUpDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={isPending} data-testid="button-submit-followup">
-                {isPending ? "Creating..." : "Create Follow-Up"}
+                {isPending ? (isEditMode ? "Updating..." : "Creating...") : (isEditMode ? "Update Follow-Up" : "Create Follow-Up")}
               </Button>
             </DialogFooter>
           </form>

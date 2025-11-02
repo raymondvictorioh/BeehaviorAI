@@ -38,3 +38,40 @@ Remember: You're helping educators support students effectively.`,
     throw new Error("Failed to get AI response");
   }
 }
+
+export async function transcribeAudio(audioBuffer: Buffer, filename: string = "audio.webm"): Promise<{
+  text: string;
+  language?: string;
+  segments?: Array<{ start: number; end: number; text: string }>;
+}> {
+  try {
+    // Create a File-like object from Buffer for OpenAI SDK
+    // Node.js 18+ supports File and Blob natively
+    const audioFile = new File([audioBuffer], filename, { 
+      type: filename.endsWith('.webm') ? "audio/webm" : 
+            filename.endsWith('.mp3') ? "audio/mpeg" :
+            filename.endsWith('.m4a') ? "audio/mp4" :
+            "audio/webm"
+    });
+    
+    const transcription = await openai.audio.transcriptions.create({
+      file: audioFile,
+      model: "whisper-1",
+      language: "en", // Optional: specify language for better accuracy
+      response_format: "verbose_json", // Get detailed response with timestamps
+    });
+
+    // Type assertion for verbose_json response which includes segments
+    const verboseResponse = transcription as any;
+
+    return {
+      text: transcription.text || "",
+      language: transcription.language,
+      segments: verboseResponse.segments || [], // Whisper segments with timestamps
+    };
+  } catch (error: any) {
+    console.error("Whisper API error:", error);
+    const errorMessage = error?.message || "Unknown error";
+    throw new Error(`Failed to transcribe audio: ${errorMessage}`);
+  }
+}

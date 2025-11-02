@@ -276,6 +276,108 @@
     pointer-events: none;
   }
 
+  /* Task list styling - TipTap creates ul[data-type="taskList"] > li[data-type="taskItem"] > label + div */
+  /* Target both in prose context and regular context */
+  .prose ul[data-type="taskList"],
+  ul[data-type="taskList"] {
+    list-style: none !important;
+    padding-left: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  /* Remove any list markers or pseudo-elements */
+  .prose ul[data-type="taskList"] li::marker,
+  ul[data-type="taskList"] li::marker {
+    content: none !important;
+    display: none !important;
+  }
+
+  .prose ul[data-type="taskList"] li::before,
+  ul[data-type="taskList"] li::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  .prose ul[data-type="taskList"] li,
+  ul[data-type="taskList"] li {
+    display: flex !important;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+    list-style: none !important;
+    padding-left: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  .prose ul[data-type="taskList"] li[data-type="taskItem"],
+  ul[data-type="taskList"] li[data-type="taskItem"] {
+    list-style: none !important;
+    padding-left: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  /* Remove any pseudo-elements that might create dots/bullets */
+  .prose ul[data-type="taskList"] li[data-type="taskItem"]::before,
+  ul[data-type="taskList"] li[data-type="taskItem"]::before,
+  .prose ul[data-type="taskList"] li[data-type="taskItem"]::after,
+  ul[data-type="taskList"] li[data-type="taskItem"]::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  /* Label with checkbox */
+  .prose ul[data-type="taskList"] li[data-type="taskItem"] > label,
+  ul[data-type="taskList"] li[data-type="taskItem"] > label {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+    margin-right: 0;
+    margin-top: 0.125em; /* Slight adjustment to align with text baseline */
+    height: 1.2em; /* Match text line height */
+  }
+
+  .prose ul[data-type="taskList"] li[data-type="taskItem"] > label > input[type="checkbox"],
+  ul[data-type="taskList"] li[data-type="taskItem"] > label > input[type="checkbox"] {
+    cursor: pointer;
+    margin: 0;
+    accent-color: hsl(var(--primary));
+    flex-shrink: 0;
+    vertical-align: middle;
+    width: 1em;
+    height: 1em;
+  }
+
+  /* Content div should allow inline content next to checkbox */
+  .prose ul[data-type="taskList"] li[data-type="taskItem"] > div,
+  ul[data-type="taskList"] li[data-type="taskItem"] > div {
+    flex: 1;
+    display: inline-block;
+    min-width: 0;
+    vertical-align: baseline;
+    line-height: 1.5;
+  }
+
+  /* Ensure paragraph elements inside are inline */
+  .prose ul[data-type="taskList"] li[data-type="taskItem"] > div > p,
+  ul[data-type="taskList"] li[data-type="taskItem"] > div > p {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    line-height: inherit;
+    vertical-align: baseline;
+  }
+
+  /* Strikethrough for completed tasks */
+  .prose ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div,
+  ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div {
+    opacity: 0.6;
+    text-decoration: line-through;
+  }
+
   /* .no-default-hover-elevate/no-default-active-elevate is an escape hatch so consumers of
    * buttons/badges can remove the automatic brightness adjustment on interactions
    * and program their own. */

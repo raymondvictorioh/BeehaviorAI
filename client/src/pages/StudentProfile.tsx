@@ -9,6 +9,7 @@ import { AISummaryCard } from "@/components/AISummaryCard";
 import { MeetingNoteCard } from "@/components/MeetingNoteCard";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
 import { AddFollowUpDialog } from "@/components/AddFollowUpDialog";
+import { AddMeetingDialog } from "@/components/AddMeetingDialog";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { ArrowLeft, Plus, Mail, GraduationCap } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
@@ -30,6 +31,8 @@ export default function StudentProfile() {
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [isLogDetailsOpen, setIsLogDetailsOpen] = useState(false);
   const [isAddFollowUpDialogOpen, setIsAddFollowUpDialogOpen] = useState(false);
+  const [editFollowUp, setEditFollowUp] = useState<FollowUp | null>(null);
+  const [isAddMeetingDialogOpen, setIsAddMeetingDialogOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch student data
@@ -149,7 +152,8 @@ export default function StudentProfile() {
   // Create follow-up mutation
   const createFollowUp = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/follow-ups`, data);
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/follow-ups`, data);
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
@@ -167,22 +171,76 @@ export default function StudentProfile() {
     },
   });
 
-  // Update follow-up mutation
+  // Update follow-up mutation with optimistic updates
   const updateFollowUp = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<FollowUp> }) => {
-      return apiRequest("PATCH", `/api/organizations/${orgId}/follow-ups/${id}`, updates);
+      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/follow-ups/${id}`, updates);
+      return await res.json();
+    },
+    // Optimistic update - immediately update UI before API call completes
+    onMutate: async ({ id, updates }) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+
+      // Snapshot the previous value
+      const previousFollowUps = queryClient.getQueryData<FollowUp[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "follow-ups",
+      ]);
+
+      // Optimistically update to the new value
+      if (previousFollowUps) {
+        queryClient.setQueryData<FollowUp[]>(
+          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+          previousFollowUps.map((followUp) =>
+            followUp.id === id ? { ...followUp, ...updates } : followUp
+          )
+        );
+      }
+
+      // Return a context object with the snapshotted value
+      return { previousFollowUps };
+    },
+    // On error, roll back to the previous value
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousFollowUps) {
+        queryClient.setQueryData<FollowUp[]>(
+          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+          context.previousFollowUps
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update follow-up. Please try again.",
+        variant: "destructive",
+      });
+    },
+    // Always refetch after error or success to ensure we have the latest data
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+    },
+  });
+
+  // Create meeting note mutation
+  const createMeetingNote = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/meeting-notes`, data);
+      return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "meeting-notes"] });
       toast({
-        title: "Follow-up updated",
-        description: "The follow-up has been successfully updated.",
+        title: "Meeting note created",
+        description: "The meeting note has been successfully saved.",
       });
     },
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update follow-up. Please try again.",
+        description: error.message || "Failed to create meeting note. Please try again.",
         variant: "destructive",
       });
     },
@@ -191,7 +249,8 @@ export default function StudentProfile() {
   // Delete follow-up mutation
   const deleteFollowUp = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest("DELETE", `/api/organizations/${orgId}/follow-ups/${id}`);
+      await apiRequest("DELETE", `/api/organizations/${orgId}/follow-ups/${id}`);
+      return id;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
@@ -362,7 +421,10 @@ export default function StudentProfile() {
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold">Follow-up Points</h2>
             <Button 
-              onClick={() => setIsAddFollowUpDialogOpen(true)}
+              onClick={() => {
+                setEditFollowUp(null); // Clear any edit state
+                setIsAddFollowUpDialogOpen(true);
+              }}
               data-testid="button-add-followup"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -376,7 +438,10 @@ export default function StudentProfile() {
                   No follow-up tasks yet. Add follow-ups to track action items for this student.
                 </p>
                 <Button 
-                  onClick={() => setIsAddFollowUpDialogOpen(true)}
+                  onClick={() => {
+                    setEditFollowUp(null); // Clear any edit state
+                    setIsAddFollowUpDialogOpen(true);
+                  }}
                   data-testid="button-add-first-followup"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -394,8 +459,8 @@ export default function StudentProfile() {
                 });
               }}
               onEdit={(followUp) => {
-                // TODO: Implement edit functionality
-                console.log("Edit follow-up", followUp.id);
+                setEditFollowUp(followUp);
+                setIsAddFollowUpDialogOpen(true);
               }}
               onDelete={(followUp) => {
                 deleteFollowUp.mutate(followUp.id);
@@ -407,7 +472,10 @@ export default function StudentProfile() {
         <TabsContent value="meetings" className="space-y-4 mt-6">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold">Meeting Notes</h2>
-            <Button data-testid="button-add-meeting">
+            <Button 
+              onClick={() => setIsAddMeetingDialogOpen(true)}
+              data-testid="button-add-meeting"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add Meeting
             </Button>
@@ -456,9 +524,33 @@ export default function StudentProfile() {
 
       <AddFollowUpDialog
         open={isAddFollowUpDialogOpen}
-        onOpenChange={setIsAddFollowUpDialogOpen}
-        onSubmit={async (data) => createFollowUp.mutate(data)}
-        isPending={createFollowUp.isPending}
+        onOpenChange={(open) => {
+          setIsAddFollowUpDialogOpen(open);
+          if (!open) {
+            setEditFollowUp(null); // Clear edit state when dialog closes
+          }
+        }}
+        onSubmit={async (data) => {
+          if (editFollowUp) {
+            // Edit mode - update existing follow-up
+            updateFollowUp.mutate({
+              id: editFollowUp.id,
+              updates: data,
+            });
+          } else {
+            // Create mode - create new follow-up
+            createFollowUp.mutate(data);
+          }
+        }}
+        isPending={editFollowUp ? updateFollowUp.isPending : createFollowUp.isPending}
+        editFollowUp={editFollowUp}
+      />
+
+      <AddMeetingDialog
+        open={isAddMeetingDialogOpen}
+        onOpenChange={setIsAddMeetingDialogOpen}
+        onSubmit={async (data) => createMeetingNote.mutate(data)}
+        isPending={createMeetingNote.isPending}
       />
     </div>
   );

@@ -1,5 +1,8 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Bold,
@@ -10,6 +13,7 @@ import {
   Quote,
   Undo,
   Redo,
+  CheckSquare,
 } from "lucide-react";
 
 interface RichTextEditorProps {
@@ -26,7 +30,15 @@ export function RichTextEditor({
   className = "",
 }: RichTextEditorProps) {
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      TaskList.configure({
+        nested: true,
+      }),
+      TaskItem.configure({
+        nested: true,
+      }),
+    ],
     content,
     editorProps: {
       attributes: {
@@ -37,6 +49,13 @@ export function RichTextEditor({
       onChange(editor.getHTML());
     },
   });
+
+  // Update editor content when content prop changes (e.g., when editing)
+  useEffect(() => {
+    if (editor && content !== editor.getHTML()) {
+      editor.commands.setContent(content, false); // false = don't add to history
+    }
+  }, [content, editor]);
 
   if (!editor) {
     return null;
@@ -102,6 +121,18 @@ export function RichTextEditor({
           data-testid="button-ordered-list"
         >
           <ListOrdered className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => editor.chain().focus().toggleTaskList().run()}
+          className={
+            editor.isActive("taskList") ? "toggle-elevate toggle-elevated" : "toggle-elevate"
+          }
+          data-testid="button-task-list"
+        >
+          <CheckSquare className="h-4 w-4" />
         </Button>
         <Button
           type="button"

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, checkOrganizationAccess } from "./replitAuth";
-import { getChatCompletion } from "./openai";
+import { getChatCompletion, transcribeAudio } from "./openai";
 import { insertFollowUpSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -197,6 +197,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/organizations/:orgId/students/:studentId/meeting-notes", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const { title, date, participants, notes, transcript } = req.body;
+      
+      // Combine notes and transcript into summary and fullNotes
+      const summary = title || "Meeting notes";
+      const fullNotes = transcript ? `${notes || ""}\n\n--- Transcript ---\n${transcript}` : notes || "";
+      
+      const meetingNote = await storage.createMeetingNote({
+        organizationId: orgId,
+        studentId,
+        date: date ? new Date(date) : new Date(),
+        participants: participants || [],
+        summary,
+        fullNotes,
+      });
+      
+      res.json(meetingNote);
+    } catch (error: any) {
+      console.error("Error creating meeting note:", error);
+      res.status(500).json({ message: "Failed to create meeting note", error: error.message });
+    }
+  });
+
   // Follow-ups routes
   app.get("/api/organizations/:orgId/students/:studentId/follow-ups", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
@@ -212,16 +237,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/organizations/:orgId/students/:studentId/follow-ups", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, studentId } = req.params;
-      const followUpData = insertFollowUpSchema.parse({
-        ...req.body,
+      
+      // Prepare follow-up data with proper date formatting
+      const followUpData: any = {
+        title: req.body.title,
+        description: req.body.description || null,
+        status: req.body.status || "To-Do",
+        assignee: req.body.assignee || null,
         organizationId: orgId,
         studentId,
-      });
-      const newFollowUp = await storage.createFollowUp(followUpData);
+      };
+      
+      // Convert dueDate string to Date object if provided
+      if (req.body.dueDate) {
+        followUpData.dueDate = new Date(req.body.dueDate);
+      } else {
+        followUpData.dueDate = null;
+      }
+      
+      // Validate with schema
+      const validatedData = insertFollowUpSchema.parse(followUpData);
+      const newFollowUp = await storage.createFollowUp(validatedData);
       res.json(newFollowUp);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating follow-up:", error);
-      res.status(500).json({ message: "Failed to create follow-up" });
+      
+      // Provide more detailed error messages
+      if (error.code === "23503") {
+        res.status(400).json({ message: "Invalid organization or student ID" });
+      } else if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create follow-up", error: error.message });
+      }
     }
   });
 
@@ -262,6 +310,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error in assistant chat:", error);
       res.status(500).json({ error: "Failed to get AI response" });
+    }
+  });
+
+  // Whisper transcription endpoint
+  app.post("/api/transcribe", isAuthenticated, async (req, res) => {
+    try {
+      if (!req.body.audio) {
+        return res.status(400).json({ error: "Audio data is required" });
+      }
+
+      // Convert base64 audio to Buffer
+      const audioBuffer = Buffer.from(req.body.audio, 'base64');
+      
+      if (audioBuffer.length === 0) {
+        return res.status(400).json({ error: "Invalid audio data" });
+      }
+
+      const transcription = await transcribeAudio(
+        audioBuffer,
+        req.body.filename || "audio.webm"
+      );
+
+      res.json({
+        text: transcription.text,
+        language: transcription.language,
+        segments: transcription.segments,
+      });
+    } catch (error: any) {
+      console.error("Error in transcription:", error);
+      res.status(500).json({ error: "Failed to transcribe audio", message: error.message });
     }
   });
 
