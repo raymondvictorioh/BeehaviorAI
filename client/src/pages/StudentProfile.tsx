@@ -566,7 +566,14 @@ export default function StudentProfile() {
   });
 
   const handleViewLog = (log: any) => {
-    setSelectedLog(log);
+    // Find category name from categoryId
+    const category = categories.find(cat => cat.id === log.categoryId);
+    // Add category name to log object for the details sheet
+    const logWithCategory = {
+      ...log,
+      category: category?.name || "Unknown"
+    };
+    setSelectedLog(logWithCategory);
     setIsLogDetailsOpen(true);
   };
 

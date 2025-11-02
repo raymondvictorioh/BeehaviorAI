@@ -232,14 +232,19 @@ export function AddMeetingDialog({
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to generate summary");
+        const errorMessage = error.error || error.message || "Failed to generate summary";
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
       setAiSummary(data.summary);
+      console.log("Summary generated successfully");
     } catch (error: any) {
       console.error("Error generating summary:", error);
-      alert(`Failed to generate summary: ${error.message}`);
+      const userMessage = error.message.includes("API key") 
+        ? "Summary generation is currently unavailable. Please contact your administrator to configure the OpenAI API key."
+        : `Failed to generate summary: ${error.message}`;
+      alert(userMessage);
     } finally {
       setIsGeneratingSummary(false);
     }
