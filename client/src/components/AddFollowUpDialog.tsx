@@ -129,10 +129,12 @@ export function AddFollowUpDialog({
       }
     });
     
-    await onSubmit(submitData);
+    // Close dialog immediately for seamless UX (mutation handles optimistic updates)
     form.reset();
     setDescription("");
     onOpenChange(false);
+    // Fire mutation after closing dialog so UI updates immediately
+    onSubmit(submitData);
   };
 
   return (

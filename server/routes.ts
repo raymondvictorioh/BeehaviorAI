@@ -349,6 +349,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Behavior Log Categories routes
+  app.get("/api/organizations/:orgId/behavior-log-categories", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      console.log(`[DEBUG] Fetching categories for orgId: ${orgId}`);
+      
+      if (!orgId) {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+      
+      const categories = await storage.getBehaviorLogCategories(orgId);
+      console.log(`[DEBUG] Found ${categories.length} categories`);
+      
+      return res.json(categories);
+    } catch (error: any) {
+      console.error("Error fetching behavior log categories:", error);
+      console.error("Error stack:", error?.stack);
+      return res.status(500).json({ 
+        message: "Failed to fetch behavior log categories",
+        error: error?.message || String(error)
+      });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/behavior-log-categories", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const categoryData = {
+        organizationId: orgId,
+        name: req.body.name,
+        description: req.body.description || null,
+        color: req.body.color || null,
+        displayOrder: req.body.displayOrder ?? 0,
+      };
+      const newCategory = await storage.createBehaviorLogCategory(categoryData);
+      res.json(newCategory);
+    } catch (error: any) {
+      console.error("Error creating behavior log category:", error);
+      res.status(500).json({ message: "Failed to create behavior log category", error: error.message });
+    }
+  });
+
+  app.patch("/api/organizations/:orgId/behavior-log-categories/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const updateData: any = {
+        name: req.body.name,
+        description: req.body.description || null,
+        color: req.body.color || null,
+        displayOrder: req.body.displayOrder,
+      };
+      
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+
+      const updatedCategory = await storage.updateBehaviorLogCategory(id, orgId, updateData);
+      res.json(updatedCategory);
+    } catch (error: any) {
+      console.error("Error updating behavior log category:", error);
+      if (error.message?.includes("not found")) {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to update behavior log category", error: error.message });
+      }
+    }
+  });
+
+  app.delete("/api/organizations/:orgId/behavior-log-categories/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      await storage.deleteBehaviorLogCategory(id, orgId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting behavior log category:", error);
+      res.status(500).json({ message: "Failed to delete behavior log category", error: error.message });
+    }
+  });
+
   // Whisper transcription endpoint
   app.post("/api/transcribe", isAuthenticated, async (req, res) => {
     try {

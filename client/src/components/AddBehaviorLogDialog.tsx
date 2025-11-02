@@ -23,6 +23,7 @@ interface AddBehaviorLogDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit?: (data: { date: string; category: string; notes: string }) => void;
+  categories?: Array<{ id: string; name: string; color?: string | null }>;
 }
 
 const getTodayDate = () => {
@@ -34,6 +35,7 @@ export function AddBehaviorLogDialog({
   open,
   onOpenChange,
   onSubmit,
+  categories = [],
 }: AddBehaviorLogDialogProps) {
   const [date, setDate] = useState(getTodayDate());
   const [category, setCategory] = useState("");
@@ -78,10 +80,11 @@ export function AddBehaviorLogDialog({
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="positive">Positive</SelectItem>
-                  <SelectItem value="neutral">Neutral</SelectItem>
-                  <SelectItem value="concern">Concern</SelectItem>
-                  <SelectItem value="serious">Serious</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

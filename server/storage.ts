@@ -4,6 +4,7 @@ import {
   organizationUsers,
   students,
   behaviorLogs,
+  behaviorLogCategories,
   meetingNotes,
   followUps,
   type User,
@@ -16,6 +17,8 @@ import {
   type InsertStudent,
   type BehaviorLog,
   type InsertBehaviorLog,
+  type BehaviorLogCategory,
+  type InsertBehaviorLogCategory,
   type MeetingNote,
   type InsertMeetingNote,
   type FollowUp,
@@ -71,6 +74,13 @@ export interface IStorage {
   createFollowUp(followUp: InsertFollowUp): Promise<FollowUp>;
   updateFollowUp(id: string, organizationId: string, followUp: Partial<InsertFollowUp>): Promise<FollowUp>;
   deleteFollowUp(id: string, organizationId: string): Promise<void>;
+  
+  // Behavior Log Category operations
+  getBehaviorLogCategories(organizationId: string): Promise<BehaviorLogCategory[]>;
+  createBehaviorLogCategory(category: InsertBehaviorLogCategory): Promise<BehaviorLogCategory>;
+  updateBehaviorLogCategory(id: string, organizationId: string, category: Partial<InsertBehaviorLogCategory>): Promise<BehaviorLogCategory>;
+  deleteBehaviorLogCategory(id: string, organizationId: string): Promise<void>;
+  seedDefaultCategories(organizationId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -98,6 +108,8 @@ export class DatabaseStorage implements IStorage {
   // Organization operations
   async createOrganization(org: InsertOrganization): Promise<Organization> {
     const [organization] = await db.insert(organizations).values(org).returning();
+    // Seed default categories for the new organization
+    await this.seedDefaultCategories(organization.id);
     return organization;
   }
 
@@ -307,6 +319,99 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(followUps)
       .where(and(eq(followUps.id, id), eq(followUps.organizationId, organizationId)));
+  }
+
+  // Behavior Log Category operations
+  async getBehaviorLogCategories(organizationId: string): Promise<BehaviorLogCategory[]> {
+    const results = await db
+      .select()
+      .from(behaviorLogCategories)
+      .where(eq(behaviorLogCategories.organizationId, organizationId));
+    
+    // Sort manually since Drizzle's orderBy might not support multiple columns in this way
+    return results.sort((a, b) => {
+      if (a.displayOrder !== b.displayOrder) {
+        return (a.displayOrder || 0) - (b.displayOrder || 0);
+      }
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }
+
+  async createBehaviorLogCategory(category: InsertBehaviorLogCategory): Promise<BehaviorLogCategory> {
+    const [newCategory] = await db
+      .insert(behaviorLogCategories)
+      .values({
+        ...category,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return newCategory;
+  }
+
+  async updateBehaviorLogCategory(
+    id: string,
+    organizationId: string,
+    category: Partial<InsertBehaviorLogCategory>
+  ): Promise<BehaviorLogCategory> {
+    const [updated] = await db
+      .update(behaviorLogCategories)
+      .set({
+        ...category,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(behaviorLogCategories.id, id), eq(behaviorLogCategories.organizationId, organizationId)))
+      .returning();
+    
+    if (!updated) {
+      throw new Error(`Category with id ${id} not found in organization ${organizationId}`);
+    }
+    
+    return updated;
+  }
+
+  async deleteBehaviorLogCategory(id: string, organizationId: string): Promise<void> {
+    await db
+      .delete(behaviorLogCategories)
+      .where(and(eq(behaviorLogCategories.id, id), eq(behaviorLogCategories.organizationId, organizationId)));
+  }
+
+  async seedDefaultCategories(organizationId: string): Promise<void> {
+    const defaultCategories: InsertBehaviorLogCategory[] = [
+      {
+        organizationId,
+        name: "Positive",
+        description: "Positive behavior and achievements",
+        color: "green",
+        displayOrder: 0,
+      },
+      {
+        organizationId,
+        name: "Neutral",
+        description: "General observations and notes",
+        color: "blue",
+        displayOrder: 1,
+      },
+      {
+        organizationId,
+        name: "Concern",
+        description: "Minor concerns requiring attention",
+        color: "amber",
+        displayOrder: 2,
+      },
+      {
+        organizationId,
+        name: "Serious",
+        description: "Serious incidents requiring immediate action",
+        color: "red",
+        displayOrder: 3,
+      },
+    ];
+
+    // Check if categories already exist to avoid duplicates
+    const existing = await this.getBehaviorLogCategories(organizationId);
+    if (existing.length === 0) {
+      await db.insert(behaviorLogCategories).values(defaultCategories);
+    }
   }
 }
 

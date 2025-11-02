@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,15 +11,215 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Building2, Users, Bell, FileText, Plus, Trash2, Edit } from "lucide-react";
+import { CategoryDialog } from "@/components/CategoryDialog";
+import type { BehaviorLogCategory } from "@shared/schema";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+const getColorClass = (color: string | null | undefined): string => {
+  const colorMap: Record<string, string> = {
+    green: "bg-green-500",
+    blue: "bg-blue-500",
+    amber: "bg-amber-500",
+    red: "bg-red-500",
+    purple: "bg-purple-500",
+    pink: "bg-pink-500",
+    orange: "bg-orange-500",
+    teal: "bg-teal-500",
+    indigo: "bg-indigo-500",
+  };
+  return color ? colorMap[color] || "bg-gray-500" : "bg-gray-500";
+};
 
 export default function Settings() {
-  // Mock state for behavior categories
-  const [categories] = useState([
-    { id: "1", name: "Positive", color: "bg-green-500", description: "Positive behavior and achievements" },
-    { id: "2", name: "Neutral", color: "bg-blue-500", description: "General observations and notes" },
-    { id: "3", name: "Concern", color: "bg-amber-500", description: "Minor concerns requiring attention" },
-    { id: "4", name: "Serious", color: "bg-red-500", description: "Serious incidents requiring immediate action" },
-  ]);
+  const { user } = useAuth();
+  const orgId = user?.organizations?.[0]?.id;
+  const { toast } = useToast();
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [editCategory, setEditCategory] = useState<BehaviorLogCategory | null>(null);
+  const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
+
+  // Fetch categories
+  const { data: categories = [], isLoading: isLoadingCategories } = useQuery<BehaviorLogCategory[]>({
+    queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
+    enabled: !!orgId,
+  });
+
+  // Create category mutation with optimistic updates
+  const createCategory = useMutation({
+    mutationFn: async (data: { name: string; description: string | null; color: string | null; displayOrder: number }) => {
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/behavior-log-categories`, data);
+      return await res.json();
+    },
+    onMutate: async (newCategory) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "behavior-log-categories"] });
+      const previousCategories = queryClient.getQueryData<BehaviorLogCategory[]>([
+        "/api/organizations",
+        orgId,
+        "behavior-log-categories",
+      ]);
+      const tempId = `temp-${Date.now()}`;
+      const optimisticCategory: BehaviorLogCategory = {
+        id: tempId,
+        organizationId: orgId!,
+        name: newCategory.name,
+        description: newCategory.description,
+        color: newCategory.color,
+        displayOrder: newCategory.displayOrder,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      if (previousCategories) {
+        queryClient.setQueryData<BehaviorLogCategory[]>(
+          ["/api/organizations", orgId, "behavior-log-categories"],
+          [...previousCategories, optimisticCategory]
+        );
+      }
+      setIsCategoryDialogOpen(false);
+      return { previousCategories, tempId };
+    },
+    onSuccess: (data: BehaviorLogCategory, _variables, context) => {
+      const previousCategories = queryClient.getQueryData<BehaviorLogCategory[]>([
+        "/api/organizations",
+        orgId,
+        "behavior-log-categories",
+      ]);
+      if (previousCategories && context?.tempId) {
+        queryClient.setQueryData<BehaviorLogCategory[]>(
+          ["/api/organizations", orgId, "behavior-log-categories"],
+          previousCategories.map((cat) => (cat.id === context.tempId ? data : cat))
+        );
+      }
+      toast({
+        title: "Category created",
+        description: "The category has been successfully created.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousCategories) {
+        queryClient.setQueryData<BehaviorLogCategory[]>(
+          ["/api/organizations", orgId, "behavior-log-categories"],
+          context.previousCategories
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create category. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-log-categories"] });
+    },
+  });
+
+  // Update category mutation with optimistic updates
+  const updateCategory = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<BehaviorLogCategory> }) => {
+      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/behavior-log-categories/${id}`, updates);
+      return await res.json();
+    },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "behavior-log-categories"] });
+      const previousCategories = queryClient.getQueryData<BehaviorLogCategory[]>([
+        "/api/organizations",
+        orgId,
+        "behavior-log-categories",
+      ]);
+      if (previousCategories) {
+        queryClient.setQueryData<BehaviorLogCategory[]>(
+          ["/api/organizations", orgId, "behavior-log-categories"],
+          previousCategories.map((cat) => (cat.id === id ? { ...cat, ...updates } : cat))
+        );
+      }
+      setIsCategoryDialogOpen(false);
+      return { previousCategories };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Category updated",
+        description: "The category has been successfully updated.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousCategories) {
+        queryClient.setQueryData<BehaviorLogCategory[]>(
+          ["/api/organizations", orgId, "behavior-log-categories"],
+          context.previousCategories
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update category. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-log-categories"] });
+    },
+  });
+
+  // Delete category mutation with optimistic updates
+  const deleteCategory = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/organizations/${orgId}/behavior-log-categories/${id}`);
+      return id;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "behavior-log-categories"] });
+      const previousCategories = queryClient.getQueryData<BehaviorLogCategory[]>([
+        "/api/organizations",
+        orgId,
+        "behavior-log-categories",
+      ]);
+      if (previousCategories) {
+        queryClient.setQueryData<BehaviorLogCategory[]>(
+          ["/api/organizations", orgId, "behavior-log-categories"],
+          previousCategories.filter((cat) => cat.id !== id)
+        );
+      }
+      setDeleteCategoryId(null);
+      return { previousCategories };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Category deleted",
+        description: "The category has been successfully deleted.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousCategories) {
+        queryClient.setQueryData<BehaviorLogCategory[]>(
+          ["/api/organizations", orgId, "behavior-log-categories"],
+          context.previousCategories
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete category. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-log-categories"] });
+    },
+  });
+
+  const handleCategorySubmit = async (data: { name: string; description: string | null; color: string | null; displayOrder: number }) => {
+    if (editCategory) {
+      updateCategory.mutate({ id: editCategory.id, updates: data });
+    } else {
+      createCategory.mutate(data);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -239,45 +443,108 @@ export default function Settings() {
                     Manage the categories used for classifying behavior logs
                   </CardDescription>
                 </div>
-                <Button data-testid="button-add-category">
+                <Button 
+                  data-testid="button-add-category"
+                  onClick={() => {
+                    setEditCategory(null);
+                    setIsCategoryDialogOpen(true);
+                  }}
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Category
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {categories.map((category, index) => (
-                  <div
-                    key={category.id}
-                    className="border rounded-lg p-4 flex items-center gap-4"
-                    data-testid={`category-item-${index}`}
+              {isLoadingCategories ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">Loading categories...</p>
+                </div>
+              ) : categories.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">No categories yet. Add your first category to get started.</p>
+                  <Button
+                    onClick={() => {
+                      setEditCategory(null);
+                      setIsCategoryDialogOpen(true);
+                    }}
                   >
-                    <div className={`h-8 w-8 rounded-md ${category.color} flex-shrink-0`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium">{category.name}</p>
-                      <p className="text-sm text-muted-foreground">{category.description}</p>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Category
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {categories.map((category, index) => (
+                    <div
+                      key={category.id}
+                      className="border rounded-lg p-4 flex items-center gap-4"
+                      data-testid={`category-item-${index}`}
+                    >
+                      <div className={`h-8 w-8 rounded-md ${getColorClass(category.color)} flex-shrink-0`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">{category.name}</p>
+                        <p className="text-sm text-muted-foreground">{category.description || "No description"}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-edit-category-${index}`}
+                          onClick={() => {
+                            setEditCategory(category);
+                            setIsCategoryDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          data-testid={`button-delete-category-${index}`}
+                          onClick={() => setDeleteCategoryId(category.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" data-testid={`button-edit-category-${index}`}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        data-testid={`button-delete-category-${index}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <CategoryDialog
+        open={isCategoryDialogOpen}
+        onOpenChange={setIsCategoryDialogOpen}
+        onSubmit={handleCategorySubmit}
+        category={editCategory}
+        isPending={editCategory ? updateCategory.isPending : createCategory.isPending}
+      />
+
+      <AlertDialog open={!!deleteCategoryId} onOpenChange={(open) => !open && setDeleteCategoryId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this category? This action cannot be undone. 
+              Behavior logs using this category will still reference it, but you won't be able to edit it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteCategoryId && deleteCategory.mutate(deleteCategoryId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

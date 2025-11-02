@@ -17,7 +17,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Student, BehaviorLog, MeetingNote, FollowUp } from "@shared/schema";
+import type { Student, BehaviorLog, MeetingNote, FollowUp, BehaviorLogCategory } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function StudentProfile() {
@@ -59,16 +59,26 @@ export default function StudentProfile() {
     enabled: !!orgId && !!studentId,
   });
 
+  // Fetch behavior log categories
+  const { data: categories = [], isLoading: isLoadingCategories } = useQuery<BehaviorLogCategory[]>({
+    queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
+    enabled: !!orgId,
+  });
+
   const isLoading = isLoadingStudent || isLoadingLogs || isLoadingNotes || isLoadingFollowUps;
 
-  // Create behavior log mutation
+  // Create behavior log mutation with optimistic updates
   const createBehaviorLog = useMutation({
     mutationFn: async (data: { date: string; category: string; notes: string }) => {
+      // Find category name from ID (data.category is the category ID)
+      const selectedCategory = categories.find(cat => cat.id === data.category);
+      const categoryName = selectedCategory?.name || data.category; // Fallback to ID if not found
+      
       const response = await fetch(`/api/organizations/${orgId}/students/${studentId}/behavior-logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          category: data.category,
+          category: categoryName.toLowerCase(), // Store name in lowercase for consistency
           notes: data.notes,
           incidentDate: new Date(data.date).toISOString(),
           loggedBy: user?.email || "Unknown",
@@ -80,94 +90,297 @@ export default function StudentProfile() {
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+    // Optimistic update - immediately add behavior log to UI
+    onMutate: async (newLog: { date: string; category: string; notes: string }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+
+      const previousLogs = queryClient.getQueryData<BehaviorLog[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "behavior-logs",
+      ]);
+
+      // Find category name from ID
+      const selectedCategory = categories.find(cat => cat.id === newLog.category);
+      const categoryName = selectedCategory?.name?.toLowerCase() || newLog.category;
+
+      const tempId = `temp-${Date.now()}`;
+      const optimisticLog: BehaviorLog = {
+        id: tempId,
+        organizationId: orgId!,
+        studentId: studentId!,
+        category: categoryName,
+        notes: newLog.notes,
+        incidentDate: new Date(newLog.date),
+        loggedBy: user?.email || "Unknown",
+        strategies: null,
+        loggedAt: new Date(),
+      };
+
+      if (previousLogs) {
+        queryClient.setQueryData<BehaviorLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
+          [...previousLogs, optimisticLog]
+        );
+      } else {
+        queryClient.setQueryData<BehaviorLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
+          [optimisticLog]
+        );
+      }
+
+      setIsAddLogDialogOpen(false);
+      return { previousLogs, tempId };
+    },
+    onSuccess: (data: BehaviorLog, _variables, context) => {
+      const previousLogs = queryClient.getQueryData<BehaviorLog[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "behavior-logs",
+      ]);
+
+      if (previousLogs && context?.tempId) {
+        queryClient.setQueryData<BehaviorLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
+          previousLogs.map((log) => (log.id === context.tempId ? data : log))
+        );
+      }
+
       toast({
         title: "Behavior log added",
         description: "The behavior log has been successfully recorded.",
       });
-      setIsAddLogDialogOpen(false);
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousLogs) {
+        queryClient.setQueryData<BehaviorLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
+          context.previousLogs
+        );
+      }
+      setIsAddLogDialogOpen(true);
       toast({
         title: "Error",
         description: error.message || "Failed to add behavior log. Please try again.",
         variant: "destructive",
       });
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+    },
   });
 
-  // Update behavior log mutation
+  // Update behavior log mutation with optimistic updates
   const updateBehaviorLog = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<{ notes: string; strategies: string }> }) => {
       return apiRequest("PATCH", `/api/organizations/${orgId}/behavior-logs/${id}`, updates);
     },
-    onSuccess: async (_, variables) => {
-      // Invalidate and refetch the behavior logs
-      await queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
-      
+    // Optimistic update - immediately update UI
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+
+      const previousLogs = queryClient.getQueryData<BehaviorLog[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "behavior-logs",
+      ]);
+
+      if (previousLogs) {
+        queryClient.setQueryData<BehaviorLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
+          previousLogs.map((log) => (log.id === id ? { ...log, ...updates } : log))
+        );
+      }
+
       // Update the selected log with the new data
-      if (selectedLog && selectedLog.id === variables.id) {
+      if (selectedLog && selectedLog.id === id) {
         setSelectedLog((prev: any) => ({
           ...prev,
-          ...variables.updates,
+          ...updates,
         }));
       }
-      
+
+      return { previousLogs };
+    },
+    onSuccess: (_, variables) => {
       toast({
         title: "Log updated",
         description: "The behavior log has been successfully updated.",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousLogs) {
+        queryClient.setQueryData<BehaviorLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
+          context.previousLogs
+        );
+      }
       toast({
         title: "Error",
         description: error.message || "Failed to update behavior log. Please try again.",
         variant: "destructive",
       });
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+    },
   });
 
-  // Delete behavior log mutation
+  // Delete behavior log mutation with optimistic updates
   const deleteBehaviorLog = useMutation({
     mutationFn: async (id: string) => {
       return apiRequest("DELETE", `/api/organizations/${orgId}/behavior-logs/${id}`);
     },
+    // Optimistic update - immediately remove from UI
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+
+      const previousLogs = queryClient.getQueryData<BehaviorLog[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "behavior-logs",
+      ]);
+
+      if (previousLogs) {
+        queryClient.setQueryData<BehaviorLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
+          previousLogs.filter((log) => log.id !== id)
+        );
+      }
+
+      // Close details sheet if viewing the deleted log
+      if (selectedLog && selectedLog.id === id) {
+        setIsLogDetailsOpen(false);
+        setSelectedLog(null);
+      }
+
+      return { previousLogs };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
       toast({
         title: "Log deleted",
         description: "The behavior log has been successfully deleted.",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousLogs) {
+        queryClient.setQueryData<BehaviorLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
+          context.previousLogs
+        );
+      }
       toast({
         title: "Error",
         description: error.message || "Failed to delete behavior log. Please try again.",
         variant: "destructive",
       });
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+    },
   });
 
-  // Create follow-up mutation
+  // Create follow-up mutation with optimistic updates
   const createFollowUp = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/follow-ups`, data);
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+    // Optimistic update - immediately add follow-up to UI before API call completes
+    onMutate: async (newFollowUp: any) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+
+      // Snapshot the previous value
+      const previousFollowUps = queryClient.getQueryData<FollowUp[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "follow-ups",
+      ]);
+
+      // Create temporary follow-up with optimistic data
+      const tempId = `temp-${Date.now()}`;
+      const optimisticFollowUp: FollowUp = {
+        id: tempId,
+        organizationId: orgId!,
+        studentId: studentId!,
+        title: newFollowUp.title || "",
+        description: newFollowUp.description || null,
+        dueDate: newFollowUp.dueDate ? new Date(newFollowUp.dueDate) : null,
+        status: (newFollowUp.status as string) || "To-Do",
+        assignee: newFollowUp.assignee || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Optimistically update to include the new follow-up
+      if (previousFollowUps) {
+        queryClient.setQueryData<FollowUp[]>(
+          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+          [...previousFollowUps, optimisticFollowUp]
+        );
+      } else {
+        queryClient.setQueryData<FollowUp[]>(
+          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+          [optimisticFollowUp]
+        );
+      }
+
+      // Return context with previous data and temp ID for rollback/replacement
+      return { previousFollowUps, tempId };
+    },
+    // On success, replace temporary follow-up with real one from server
+    onSuccess: (data: FollowUp, _variables, context) => {
+      const previousFollowUps = queryClient.getQueryData<FollowUp[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "follow-ups",
+      ]);
+
+      if (previousFollowUps && context?.tempId) {
+        // Replace temporary follow-up with the real one from server
+        queryClient.setQueryData<FollowUp[]>(
+          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+          previousFollowUps.map((followUp) =>
+            followUp.id === context.tempId ? data : followUp
+          )
+        );
+      }
+
       toast({
         title: "Follow-up created",
         description: "The follow-up has been successfully created.",
       });
     },
-    onError: (error: Error) => {
+    // On error, roll back to the previous value
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousFollowUps) {
+        queryClient.setQueryData<FollowUp[]>(
+          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+          context.previousFollowUps
+        );
+      }
       toast({
         title: "Error",
         description: error.message || "Failed to create follow-up. Please try again.",
         variant: "destructive",
       });
+    },
+    // Always refetch after error or success to ensure we have the latest data
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
     },
   });
 
@@ -224,47 +437,138 @@ export default function StudentProfile() {
     },
   });
 
-  // Create meeting note mutation
+  // Create meeting note mutation with optimistic updates
   const createMeetingNote = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/meeting-notes`, data);
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "meeting-notes"] });
+    // Optimistic update - immediately add meeting note to UI
+    onMutate: async (newNote: any) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "meeting-notes"] });
+
+      const previousNotes = queryClient.getQueryData<MeetingNote[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "meeting-notes",
+      ]);
+
+      const tempId = `temp-${Date.now()}`;
+      const optimisticNote: MeetingNote = {
+        id: tempId,
+        organizationId: orgId!,
+        studentId: studentId!,
+        title: newNote.title || "Untitled meeting",
+        date: newNote.date ? new Date(newNote.date) : new Date(),
+        participants: newNote.participants || [],
+        summary: newNote.title || "Untitled meeting",
+        fullNotes: newNote.notes ? `${newNote.notes}${newNote.transcript ? `\n\n--- Transcript ---\n${newNote.transcript}` : ''}` : (newNote.transcript || ""),
+        createdAt: new Date(),
+      };
+
+      if (previousNotes) {
+        queryClient.setQueryData<MeetingNote[]>(
+          ["/api/organizations", orgId, "students", studentId, "meeting-notes"],
+          [...previousNotes, optimisticNote]
+        );
+      } else {
+        queryClient.setQueryData<MeetingNote[]>(
+          ["/api/organizations", orgId, "students", studentId, "meeting-notes"],
+          [optimisticNote]
+        );
+      }
+
+      return { previousNotes, tempId };
+    },
+    onSuccess: (data: MeetingNote, _variables, context) => {
+      const previousNotes = queryClient.getQueryData<MeetingNote[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "meeting-notes",
+      ]);
+
+      if (previousNotes && context?.tempId) {
+        queryClient.setQueryData<MeetingNote[]>(
+          ["/api/organizations", orgId, "students", studentId, "meeting-notes"],
+          previousNotes.map((note) => (note.id === context.tempId ? data : note))
+        );
+      }
+
       toast({
         title: "Meeting note created",
         description: "The meeting note has been successfully saved.",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousNotes) {
+        queryClient.setQueryData<MeetingNote[]>(
+          ["/api/organizations", orgId, "students", studentId, "meeting-notes"],
+          context.previousNotes
+        );
+      }
       toast({
         title: "Error",
         description: error.message || "Failed to create meeting note. Please try again.",
         variant: "destructive",
       });
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "meeting-notes"] });
+    },
   });
 
-  // Delete follow-up mutation
+  // Delete follow-up mutation with optimistic updates
   const deleteFollowUp = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/organizations/${orgId}/follow-ups/${id}`);
       return id;
     },
+    // Optimistic update - immediately remove from UI
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+
+      const previousFollowUps = queryClient.getQueryData<FollowUp[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "follow-ups",
+      ]);
+
+      if (previousFollowUps) {
+        queryClient.setQueryData<FollowUp[]>(
+          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+          previousFollowUps.filter((followUp) => followUp.id !== id)
+        );
+      }
+
+      return { previousFollowUps };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
       toast({
         title: "Follow-up deleted",
         description: "The follow-up has been successfully deleted.",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousFollowUps) {
+        queryClient.setQueryData<FollowUp[]>(
+          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+          context.previousFollowUps
+        );
+      }
       toast({
         title: "Error",
         description: error.message || "Failed to delete follow-up. Please try again.",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
     },
   });
 
@@ -511,6 +815,7 @@ export default function StudentProfile() {
         open={isAddLogDialogOpen}
         onOpenChange={setIsAddLogDialogOpen}
         onSubmit={(data) => createBehaviorLog.mutate(data)}
+        categories={categories}
       />
 
       <BehaviorLogDetailsSheet

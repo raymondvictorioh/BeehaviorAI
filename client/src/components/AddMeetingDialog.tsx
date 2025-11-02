@@ -471,17 +471,19 @@ export function AddMeetingDialog({
   };
 
   const handleSubmit = async (data: FormData) => {
-    await onSubmit({
-      ...data,
-      participants,
-      notes: notesContent,
-      transcript: transcriptContent,
-    });
+    // Close dialog immediately for seamless UX (mutation handles optimistic updates)
     form.reset();
     setNotesContent("");
     setTranscriptContent("");
     setIsRecording(false);
     onOpenChange(false);
+    // Fire mutation after closing dialog so UI updates immediately
+    onSubmit({
+      ...data,
+      participants,
+      notes: notesContent,
+      transcript: transcriptContent,
+    });
   };
 
   const addParticipant = () => {

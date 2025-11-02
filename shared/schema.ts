@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   index,
+  integer,
   jsonb,
   pgTable,
   timestamp,
@@ -120,6 +121,27 @@ export const insertBehaviorLogSchema = createInsertSchema(behaviorLogs).omit({
 
 export type InsertBehaviorLog = z.infer<typeof insertBehaviorLogSchema>;
 export type BehaviorLog = typeof behaviorLogs.$inferSelect;
+
+// Behavior Log Categories table
+export const behaviorLogCategories = pgTable("behavior_log_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  color: varchar("color", { length: 50 }), // e.g., "green", "blue", "amber", "red" or hex codes
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertBehaviorLogCategorySchema = createInsertSchema(behaviorLogCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertBehaviorLogCategory = z.infer<typeof insertBehaviorLogCategorySchema>;
+export type BehaviorLogCategory = typeof behaviorLogCategories.$inferSelect;
 
 // Meeting Notes table
 export const meetingNotes = pgTable("meeting_notes", {

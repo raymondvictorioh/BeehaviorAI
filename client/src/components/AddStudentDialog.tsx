@@ -20,6 +20,7 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { Student } from "@shared/schema";
 
 interface AddStudentDialogProps {
   open: boolean;
@@ -56,24 +57,85 @@ export function AddStudentDialog({
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", organizationId, "students"] });
-      toast({
-        title: "Student added",
-        description: "The student has been successfully added.",
-      });
+    // Optimistic update - immediately add student to UI
+    onMutate: async (newStudent: { name: string; email: string; class: string; gender: string }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", organizationId, "students"] });
+
+      const previousStudents = queryClient.getQueryData<Student[]>([
+        "/api/organizations",
+        organizationId,
+        "students",
+      ]);
+
+      const tempId = `temp-${Date.now()}`;
+      const optimisticStudent: Student = {
+        id: tempId,
+        organizationId,
+        name: newStudent.name,
+        email: newStudent.email || null,
+        class: newStudent.class || null,
+        gender: newStudent.gender || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      if (previousStudents) {
+        queryClient.setQueryData<Student[]>(
+          ["/api/organizations", organizationId, "students"],
+          [...previousStudents, optimisticStudent]
+        );
+      } else {
+        queryClient.setQueryData<Student[]>(
+          ["/api/organizations", organizationId, "students"],
+          [optimisticStudent]
+        );
+      }
+
+      // Close dialog and reset form immediately
       setName("");
       setEmail("");
       setStudentClass("");
       setGender("");
       onOpenChange(false);
+
+      return { previousStudents, tempId };
     },
-    onError: (error: Error) => {
+    onSuccess: (data: Student, _variables, context) => {
+      const previousStudents = queryClient.getQueryData<Student[]>([
+        "/api/organizations",
+        organizationId,
+        "students",
+      ]);
+
+      if (previousStudents && context?.tempId) {
+        queryClient.setQueryData<Student[]>(
+          ["/api/organizations", organizationId, "students"],
+          previousStudents.map((student) => (student.id === context.tempId ? data : student))
+        );
+      }
+
+      toast({
+        title: "Student added",
+        description: "The student has been successfully added.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousStudents) {
+        queryClient.setQueryData<Student[]>(
+          ["/api/organizations", organizationId, "students"],
+          context.previousStudents
+        );
+      }
+      // Reopen dialog on error
+      onOpenChange(true);
       toast({
         title: "Error",
         description: error.message || "Failed to add student. Please try again.",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", organizationId, "students"] });
     },
   });
 
