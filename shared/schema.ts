@@ -106,7 +106,7 @@ export const behaviorLogs = pgTable("behavior_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   studentId: varchar("student_id").notNull().references(() => students.id),
-  category: varchar("category", { length: 50 }).notNull(), // positive, neutral, concern, serious
+  categoryId: varchar("category_id").notNull().references(() => behaviorLogCategories.id, { onDelete: "restrict" }),
   incidentDate: timestamp("incident_date").notNull(),
   notes: text("notes").notNull(),
   strategies: text("strategies"),
