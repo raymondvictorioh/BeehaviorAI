@@ -61,7 +61,7 @@ export default function StudentProfile() {
 
   // Fetch behavior log categories
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery<BehaviorLogCategory[]>({
-    queryKey: ["/api/organizations", orgId, "categories"],
+    queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
     enabled: !!orgId,
   });
 
