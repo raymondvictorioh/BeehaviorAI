@@ -14,6 +14,7 @@ import {
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ThemeProvider";
+import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
   {
@@ -41,6 +42,9 @@ const menuItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { user, isLoading } = useAuth();
+  
+  const organizationName = user?.organizations?.[0]?.name;
 
   return (
     <Sidebar>
@@ -51,7 +55,9 @@ export function AppSidebar() {
           </div>
           <div>
             <h2 className="text-lg font-semibold">BehaviorHub</h2>
-            <p className="text-xs text-muted-foreground">Lincoln High School</p>
+            <p className="text-xs text-muted-foreground">
+              {isLoading ? "Loading..." : organizationName || ""}
+            </p>
           </div>
         </div>
       </SidebarHeader>
