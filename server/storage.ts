@@ -264,6 +264,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateStudent(id: string, organizationId: string, student: Partial<InsertStudent>): Promise<Student> {
+    console.log(`[DEBUG Storage] updateStudent called:`, {
+      id,
+      organizationId,
+      student,
+    });
+
     // Check if email is being updated and if it conflicts with existing student
     if (student.email) {
       const existingStudent = await db
@@ -277,22 +283,41 @@ export class DatabaseStorage implements IStorage {
             ne(students.id, id)
           )
         );
-      
+
       if (existingStudent.length > 0) {
         throw new Error(`A student with email ${student.email} already exists in this organization`);
       }
     }
-    
+
+    // Validate classId if being updated
+    if (student.classId !== undefined && student.classId !== null) {
+      const classExists = await db
+        .select()
+        .from(classes)
+        .where(
+          and(
+            eq(classes.id, student.classId),
+            eq(classes.organizationId, organizationId)
+          )
+        )
+        .limit(1);
+
+      if (classExists.length === 0) {
+        throw new Error(`Class with id ${student.classId} not found in organization ${organizationId}`);
+      }
+    }
+
     const [updated] = await db
       .update(students)
       .set({ ...student, updatedAt: new Date() })
       .where(and(eq(students.id, id), eq(students.organizationId, organizationId)))
       .returning();
-    
+
     if (!updated) {
       throw new Error(`Student with id ${id} not found in organization ${organizationId}`);
     }
-    
+
+    console.log(`[DEBUG Storage] Student updated successfully:`, updated);
     return updated;
   }
 

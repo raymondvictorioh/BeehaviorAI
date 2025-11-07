@@ -49,7 +49,14 @@ export function AddStudentDialog({
   });
 
   // Filter to only active (non-archived) classes
-  const activeClasses = classes.filter(c => !c.isArchived);
+  // BUT: If editing a student and their current class is archived, include it in the list
+  const activeClasses = classes.filter(c => {
+    // Always include non-archived classes
+    if (!c.isArchived) return true;
+    // Include archived class if it's the student's current class (for edit mode)
+    if (isEditMode && student && student.classId === c.id) return true;
+    return false;
+  });
 
   // Populate form when editing
   useEffect(() => {
@@ -174,12 +181,38 @@ export function AddStudentDialog({
       classId: string | null;
       gender: string;
     }) => {
+      const url = `/api/organizations/${organizationId}/students/${student!.id}`;
+      console.log('[DEBUG] Updating student:', {
+        studentId: student!.id,
+        organizationId,
+        url,
+        data,
+      });
+
       const res = await apiRequest(
         "PATCH",
-        `/api/organizations/${organizationId}/students/${student!.id}`,
+        url,
         data
       );
-      return await res.json();
+
+      console.log('[DEBUG] Response received:', {
+        status: res.status,
+        statusText: res.statusText,
+        contentType: res.headers.get('content-type'),
+        ok: res.ok,
+      });
+
+      // Check if response is JSON before parsing
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('[DEBUG] Non-JSON response received:', text.substring(0, 500));
+        throw new Error(`Server returned ${contentType || 'unknown content type'} instead of JSON. This usually means the API endpoint was not found.`);
+      }
+
+      const result = await res.json();
+      console.log('[DEBUG] Update successful:', result);
+      return result;
     },
     // Optimistic update
     onMutate: async (updatedData: { name: string; email: string; classId: string | null; gender: string }) => {
@@ -250,6 +283,12 @@ export function AddStudentDialog({
       });
     },
     onError: (error: Error, _variables, context) => {
+      console.error('[DEBUG] Update student error:', {
+        error,
+        errorMessage: error.message,
+        variables: _variables,
+      });
+
       // Revert optimistic updates
       if (context?.previousStudent) {
         queryClient.setQueryData<Student>(
@@ -265,7 +304,7 @@ export function AddStudentDialog({
       }
       // Reopen dialog on error
       onOpenChange(true);
-      
+
       // Extract error message - handle both Error objects and string messages
       let errorMessage = "Failed to update student. Please try again.";
       if (error instanceof Error) {
@@ -273,7 +312,9 @@ export function AddStudentDialog({
       } else if (typeof error === "string") {
         errorMessage = error;
       }
-      
+
+      console.error('[DEBUG] Displaying error to user:', errorMessage);
+
       toast({
         title: "Error",
         description: errorMessage,
@@ -339,8 +380,11 @@ export function AddStudentDialog({
               <Select value={classId || "__none__"} onValueChange={setClassId} disabled={isLoadingClasses}>
                 <SelectTrigger id="class" data-testid="select-student-class">
                   <SelectValue placeholder={isLoadingClasses ? "Loading classes..." : "Select a class"}>
-                    {classId && classId !== "__none__" 
-                      ? activeClasses.find(c => c.id === classId)?.name || "Select a class"
+                    {classId && classId !== "__none__"
+                      ? (() => {
+                          const selectedClass = activeClasses.find(c => c.id === classId);
+                          return selectedClass ? `${selectedClass.name}${selectedClass.isArchived ? ' (Archived)' : ''}` : "Select a class";
+                        })()
                       : "Select a class"}
                   </SelectValue>
                 </SelectTrigger>
@@ -348,7 +392,7 @@ export function AddStudentDialog({
                   <SelectItem value="__none__">None</SelectItem>
                   {activeClasses.map((classItem) => (
                     <SelectItem key={classItem.id} value={classItem.id}>
-                      {classItem.name}
+                      {classItem.name}{classItem.isArchived ? ' (Archived)' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>

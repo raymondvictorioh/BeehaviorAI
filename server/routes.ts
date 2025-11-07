@@ -173,40 +173,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/organizations/:orgId/students/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, id } = req.params;
+
+      console.log(`[DEBUG] PATCH student request:`, {
+        orgId,
+        studentId: id,
+        body: req.body,
+      });
+
       const updateData: any = {};
-      
+
       if (req.body.name !== undefined) updateData.name = req.body.name;
       if (req.body.email !== undefined) updateData.email = req.body.email || null;
       if (req.body.classId !== undefined) updateData.classId = req.body.classId || null;
       if (req.body.gender !== undefined) updateData.gender = req.body.gender || null;
-      
+
       // Remove undefined fields
       Object.keys(updateData).forEach(key => {
         if (updateData[key] === undefined) {
           delete updateData[key];
         }
       });
-      
+
+      console.log(`[DEBUG] Prepared update data:`, updateData);
+
       const updatedStudent = await storage.updateStudent(id, orgId, updateData);
+      console.log(`[DEBUG] Student updated successfully`);
       res.json(updatedStudent);
     } catch (error: any) {
       console.error("Error updating student:", error);
-      
+      console.error("Error details:", {
+        code: error.code,
+        constraint: error.constraint,
+        message: error.message,
+      });
+
       if (error.message && error.message.includes("not found")) {
         return res.status(404).json({ message: error.message });
       }
-      
+
       if (error.message && error.message.includes("already exists")) {
         return res.status(400).json({ message: error.message });
       }
-      
-      if (error.code === "23505" || (error.constraint && error.constraint === "unique_email_per_org")) {
-        const email = req.body.email;
-        return res.status(400).json({ 
-          message: `A student with email ${email} already exists in this organization` 
+
+      // Handle foreign key constraint violations (e.g., invalid classId)
+      if (error.code === "23503") {
+        return res.status(400).json({
+          message: "Invalid class selected. The class may have been deleted or doesn't exist."
         });
       }
-      
+
+      if (error.code === "23505" || (error.constraint && error.constraint === "unique_email_per_org")) {
+        const email = req.body.email;
+        return res.status(400).json({
+          message: `A student with email ${email} already exists in this organization`
+        });
+      }
+
       res.status(500).json({ message: "Failed to update student", error: error.message });
     }
   });
