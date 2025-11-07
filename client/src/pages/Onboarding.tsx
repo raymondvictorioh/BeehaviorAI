@@ -61,7 +61,7 @@ export default function Onboarding() {
           <div className="flex justify-center mb-4">
             <Building2 className="h-12 w-12 text-primary" />
           </div>
-          <CardTitle className="text-3xl">Welcome to BehaviorHub!</CardTitle>
+          <CardTitle className="text-3xl">Welcome to Beehave!</CardTitle>
           <CardDescription className="text-base">
             Let's set up your school organization to get started
           </CardDescription>

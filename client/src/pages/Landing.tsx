@@ -14,7 +14,7 @@ export default function Landing() {
         <header className="flex items-center justify-between mb-16">
           <div className="flex items-center gap-2">
             <GraduationCap className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold">BehaviorHub</h1>
+            <h1 className="text-2xl font-bold">Beehave</h1>
           </div>
           <Button onClick={handleLogin} size="lg" data-testid="button-login">
             Log In
@@ -86,7 +86,7 @@ export default function Landing() {
                 Ready to Transform Your Approach to Behavior Management?
               </h3>
               <p className="text-muted-foreground mb-6">
-                Join schools already using BehaviorHub to support student success.
+                Join schools already using Beehave to support student success.
               </p>
               <Button onClick={handleLogin} size="lg" data-testid="button-cta">
                 Start Your Free Trial

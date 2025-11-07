@@ -79,7 +79,7 @@ export function AppSidebar() {
             <GraduationCap className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">BehaviorHub</h2>
+            <h2 className="text-lg font-semibold">Beehave</h2>
             <p className="text-xs text-muted-foreground">
               {isLoading ? "Loading..." : organizationName || ""}
             </p>

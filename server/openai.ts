@@ -11,7 +11,7 @@ export async function getChatCompletion(
   try {
     const systemMessage = {
       role: "system" as const,
-      content: `You are an AI assistant for BehaviorHub, a school behavior management system. You help teachers and administrators understand student behavior patterns, provide recommendations for interventions, and answer questions about behavior management best practices.
+      content: `You are an AI assistant for Beehave, a school behavior management system. You help teachers and administrators understand student behavior patterns, provide recommendations for interventions, and answer questions about behavior management best practices.
 
 Context: The user is currently on the ${context?.page || "unknown"} page.
 

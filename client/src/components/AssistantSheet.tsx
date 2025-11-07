@@ -59,7 +59,7 @@ export function AssistantSheet({ open, onOpenChange }: AssistantSheetProps) {
     }
     return {
       type: "general",
-      label: "BehaviorHub",
+      label: "Beehave",
       description: "I'm here to help with student behavior management",
     };
   };

@@ -12,10 +12,10 @@ interface BehaviorLogEntryProps {
 }
 
 const categoryColors: Record<string, string> = {
-  positive: "bg-green-500",
-  neutral: "bg-blue-500",
-  concern: "bg-amber-500",
-  serious: "bg-red-500",
+  positive: "bg-positive",
+  neutral: "bg-primary",
+  concern: "bg-yellow-500",
+  serious: "bg-destructive",
 };
 
 export function BehaviorLogEntry({

@@ -1,8 +1,8 @@
-# BehaviorHub - School Behavior Management System
+# Beehave - School Behavior Management System
 
 ## Overview
 
-BehaviorHub is a SaaS application for school behavior management, designed to help teachers and administrators track student behavior, generate AI-powered summaries, manage meetings, and create reports. The system provides a professional interface for recording behavioral incidents, analyzing trends, and maintaining communication records with students and parents.
+Beehave is a SaaS application for school behavior management, designed to help teachers and administrators track student behavior, generate AI-powered summaries, manage meetings, and create reports. The system provides a professional interface for recording behavioral incidents, analyzing trends, and maintaining communication records with students and parents.
 
 **Core Functionality:**
 - Student profile management with behavior tracking

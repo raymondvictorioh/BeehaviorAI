@@ -1,4 +1,4 @@
-# Running BehaviorHub Locally
+# Running Beehave Locally
 
 This guide explains how to run the BehaviorHub school behavior management application on your local computer.
 

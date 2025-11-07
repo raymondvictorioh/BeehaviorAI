@@ -34,6 +34,51 @@
 
 ---
 
+## Color Scheme
+
+**Primary Background:**
+- Main background: Off-white/very light grey (`#F8F8F8` or similar)
+- Card backgrounds: White (`#FFFFFF`)
+- Subtle borders/separators: Light grey (`#E5E5E5` or similar)
+
+**Accent Yellow (Primary Interactive Color):**
+- Used for: Active navigation items, student avatars, primary buttons, timeline markers, user profile highlights
+- Color: Warm, slightly muted yellow (e.g., `#F5C842` or similar)
+- Text on yellow: Dark grey/black for avatars, white for active navigation items
+- Application:
+  - Active sidebar navigation: Yellow background with white text
+  - Student avatar background: Yellow circle with dark grey initials
+  - Primary action buttons: Yellow background ("+ New Log", "Uncover Insights")
+  - Timeline vertical markers: Yellow line on left side of entries
+  - User profile icon: Yellow circular background
+
+**Accent Green (Positive Indicators):**
+- Used for: Positive behavior badges, achievement badges, status indicators
+- Color: Fresh, slightly desaturated green (e.g., `#4CAF50` or similar)
+- Application:
+  - "Positive Behavior" badges in timeline
+  - Student achievement badges ("Improving", "Math Whiz")
+  - Success states and positive feedback
+
+**Text Colors:**
+- Primary headings: Dark grey/black (`#333333` or similar)
+- Secondary text: Medium grey (`#666666` or similar)
+- Muted text: Light grey (`#999999` or similar)
+  - Examples: Grade/class info, "Logged by" text, timestamps
+- Active navigation text: White (on yellow background)
+- Inactive tab text: Medium grey
+
+**Borders and Separators:**
+- Card borders: Subtle light grey lines
+- Tab separators: Light grey
+- Timeline connectors: Yellow vertical line
+
+**Icon Colors:**
+- Default icons: Dark grey
+- Highlighted icons: Yellow (when active/selected)
+- Positive indicators: Green
+
+---
 ## Layout System
 
 **Spacing Primitives:** Tailwind units of 2, 4, 6, and 8
@@ -60,14 +105,18 @@
 ### Navigation
 **Top Navigation Bar:**
 - Fixed header with h-16, shadow-sm
-- School logo/name on left, user profile/settings on right
-- Minimal design focusing on school branding and quick access
+- Central search input: "Search students, logs, or reports..." with magnifying glass icon
+- Right side controls: Theme toggle (crescent moon icon) and user profile (person icon with yellow circular background when active)
+- Minimal design focusing on functionality and quick access
 
 **Sidebar Navigation:**
 - Fixed w-64 sidebar with primary navigation items
-- Active state: Subtle background treatment with medium font-weight
+- Active state: Yellow background (`#F5C842` or similar) with white text
+- Inactive state: Transparent background with dark grey text
 - Icons from Heroicons (outline style) paired with labels
-- Sections: Dashboard, Students, Reports, Settings
+- Sections: Dashboard, Students, Reports, Tasks, Settings
+- Logo at top: "Beehave" with bee icon
+- Version indicator at bottom: "Beehave v1.0"
 - Collapsible on mobile with hamburger menu
 
 ### Core UI Elements
@@ -80,9 +129,50 @@
 - Click-through to full profile
 
 **Student Profile Layout:**
-- Header section: Student details (name, email, class, gender) in horizontal layout with larger photo (w-24 h-24)
-- Tab navigation for: Overview, Behavior Logs, Follow-ups, Meeting Notes
-- AI Summary card: Prominent placement with rounded-lg, p-6, distinct visual treatment
+
+**Back Navigation:**
+- Arrow icon pointing left + "Back to Students" text
+- Positioned at top of main content area
+- Clickable breadcrumb navigation
+
+**Student Information Card:**
+- Large avatar: Yellow circular background (w-24 h-24) with dark grey initials
+- Student name: Prominently displayed in large, bold font (text-3xl or similar)
+- Grade/Class info: Displayed below name (e.g., "7th Grade - Math") in medium grey text
+- Badges: Green, rounded rectangular badges for achievements/status (e.g., "Improving", "Math Whiz")
+  - Badge style: Rounded corners, green background, white or dark text
+- Resources section: "Resources +" with clickable links
+  - Each resource link includes external link icon
+  - Examples: "Product Specs", "Study Guide"
+
+**Profile Tabs:**
+- Two-tab system: "Behavior" (active) and "Academic" (inactive)
+- Active tab: White background, dark text
+- Inactive tab: Light grey background, medium grey text
+- Tab container: Subtle border separator between tabs
+
+**Behavior Timeline Section:**
+- Header: "Behavior Timeline" on left, yellow "+ New Log" button on right
+- Timeline entries: Chronological list with vertical yellow line marker on left side
+- Each timeline entry contains:
+  - Date: Displayed prominently (e.g., "Nov 7, 2025")
+  - Badge: Green "Positive Behavior" badge (or other category badges)
+  - Description: Full text description of the behavior/event
+  - Metadata: "Logged by [Name]" in muted grey text
+- Vertical yellow line connects all entries visually
+- Spacing: Adequate padding between entries for readability
+
+**AI Insights Card:**
+- Positioned on right side of main content area
+- Title: "Want help understanding this student through their data?" with sparkle icon
+- Description: "Get AI-powered insights about this student's behavior patterns and academic performance."
+- CTA Button: Yellow "Uncover Insights" button with sparkle icon
+- Card style: Rounded corners, white background, subtle border
+
+**Fixed Help Icon:**
+- Small black circle with white question mark
+- Fixed position at bottom right corner of screen
+- Always accessible for user assistance
 
 ### Forms
 
@@ -103,20 +193,27 @@
 
 ### Data Display
 
-**Behavior Log Entries:**
-- Timeline-style layout with vertical line connecting entries
-- Each log: Card with rounded-lg, p-4, border-l-4 (category indicator)
-- Date badge: text-xs with subtle background
-- Category tag: Inline badge with rounded-full px-3 py-1
-- Notes: text-sm with max-w-prose
-- Edit/Delete actions: Icon buttons on hover
+**Behavior Log Entries (Timeline Style):**
+- Timeline-style layout with vertical yellow line on left side connecting all entries
+- Each log entry structure:
+  - Date: Prominently displayed (e.g., "Nov 7, 2025")
+  - Category badge: Green "Positive Behavior" badge (or other category colors)
+    - Rounded rectangular shape
+    - Category-specific color coding
+  - Description: Full text description in medium grey
+  - Metadata: "Logged by [Name]" in muted grey text (text-xs)
+- Spacing: Generous padding between entries for visual separation
+- Visual hierarchy: Date → Badge → Description → Metadata
+- No card borders around individual entries (clean, minimal design)
 
-**AI Summary Display:**
-- Dedicated card with p-6, rounded-lg
-- "AI Generated Summary" label with icon
-- Summary text: text-base with line-height relaxed
-- Last updated timestamp
-- Regenerate button for manual refresh
+**AI Insights/Powered Features:**
+- Card layout: White background, rounded corners, subtle border
+- Title: Engaging question format (e.g., "Want help understanding this student through their data?")
+- Icon: Sparkle icon to indicate AI-powered features
+- Description: Clear explanation of AI capabilities
+- CTA Button: Yellow "Uncover Insights" button with sparkle icon
+- Placement: Right side of content area for visibility
+- Visual treatment: Distinct from other cards, emphasizes AI capabilities
 
 **Meeting Notes:**
 - List view with date and participant info
@@ -177,11 +274,16 @@
 
 ## Images
 
-**Student Photos:**
-- Placement: Student cards, profile headers, log entries
+**Student Avatars:**
+- Placement: Student cards, profile headers
 - Treatment: Circular (rounded-full)
-- Sizes: Small (w-8 h-8 in logs), Medium (w-12 h-12 in cards), Large (w-24 h-24 in profile header)
-- Fallback: Initials on solid background when no photo
+- Sizes: 
+  - Small (w-8 h-8 in logs)
+  - Medium (w-12 h-12 in cards)
+  - Large (w-24 h-24 in profile header)
+- Fallback: Yellow circular background with dark grey initials when no photo
+- Initials: First letter of first name + first letter of last name (e.g., "EJ" for Emma Johnson)
+- Color: Yellow background (`#F5C842` or similar) with dark grey text (`#333333`)
 
 **No Hero Images:** This is a dashboard application, not a marketing site. Focus remains on data and functionality.
 
