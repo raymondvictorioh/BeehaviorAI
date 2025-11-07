@@ -7,6 +7,7 @@ import {
   behaviorLogCategories,
   meetingNotes,
   followUps,
+  classes,
   type User,
   type UpsertUser,
   type Organization,
@@ -23,9 +24,11 @@ import {
   type InsertMeetingNote,
   type FollowUp,
   type InsertFollowUp,
+  type Class,
+  type InsertClass,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 
 export interface DashboardStats {
   totalStudents: number;
@@ -82,6 +85,13 @@ export interface IStorage {
   updateBehaviorLogCategory(id: string, organizationId: string, category: Partial<InsertBehaviorLogCategory>): Promise<BehaviorLogCategory>;
   deleteBehaviorLogCategory(id: string, organizationId: string): Promise<void>;
   seedDefaultCategories(organizationId: string): Promise<void>;
+  
+  // Class operations
+  getClasses(organizationId: string): Promise<Class[]>;
+  getClass(id: string, organizationId: string): Promise<Class | undefined>;
+  createClass(classData: InsertClass): Promise<Class>;
+  updateClass(id: string, organizationId: string, classData: Partial<InsertClass>): Promise<Class>;
+  deleteClass(id: string, organizationId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -254,11 +264,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateStudent(id: string, organizationId: string, student: Partial<InsertStudent>): Promise<Student> {
+    // Check if email is being updated and if it conflicts with existing student
+    if (student.email) {
+      const existingStudent = await db
+        .select()
+        .from(students)
+        .where(
+          and(
+            eq(students.organizationId, organizationId),
+            eq(students.email, student.email),
+            // Exclude current student from check
+            ne(students.id, id)
+          )
+        );
+      
+      if (existingStudent.length > 0) {
+        throw new Error(`A student with email ${student.email} already exists in this organization`);
+      }
+    }
+    
     const [updated] = await db
       .update(students)
       .set({ ...student, updatedAt: new Date() })
       .where(and(eq(students.id, id), eq(students.organizationId, organizationId)))
       .returning();
+    
+    if (!updated) {
+      throw new Error(`Student with id ${id} not found in organization ${organizationId}`);
+    }
+    
     return updated;
   }
 
@@ -468,6 +502,71 @@ export class DatabaseStorage implements IStorage {
     if (existing.length === 0) {
       await db.insert(behaviorLogCategories).values(defaultCategories);
     }
+  }
+
+  // Class operations
+  async getClasses(organizationId: string): Promise<Class[]> {
+    return await db
+      .select()
+      .from(classes)
+      .where(eq(classes.organizationId, organizationId));
+  }
+
+  async getClass(id: string, organizationId: string): Promise<Class | undefined> {
+    const [classData] = await db
+      .select()
+      .from(classes)
+      .where(and(eq(classes.id, id), eq(classes.organizationId, organizationId)));
+    return classData;
+  }
+
+  async createClass(classData: InsertClass): Promise<Class> {
+    const [newClass] = await db
+      .insert(classes)
+      .values({
+        ...classData,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return newClass;
+  }
+
+  async updateClass(
+    id: string,
+    organizationId: string,
+    classData: Partial<InsertClass>
+  ): Promise<Class> {
+    const [updated] = await db
+      .update(classes)
+      .set({
+        ...classData,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(classes.id, id), eq(classes.organizationId, organizationId)))
+      .returning();
+    
+    if (!updated) {
+      throw new Error(`Class with id ${id} not found in organization ${organizationId}`);
+    }
+    
+    return updated;
+  }
+
+  async deleteClass(id: string, organizationId: string): Promise<void> {
+    // Check if any students are assigned to this class
+    const studentsWithClass = await db
+      .select()
+      .from(students)
+      .where(and(eq(students.classId, id), eq(students.organizationId, organizationId)))
+      .limit(1);
+    
+    if (studentsWithClass.length > 0) {
+      throw new Error("Cannot delete class with assigned students. Please unassign students first or archive the class instead.");
+    }
+    
+    await db
+      .delete(classes)
+      .where(and(eq(classes.id, id), eq(classes.organizationId, organizationId)));
   }
 }
 

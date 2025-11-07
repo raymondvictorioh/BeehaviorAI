@@ -170,6 +170,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/organizations/:orgId/students/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const updateData: any = {};
+      
+      if (req.body.name !== undefined) updateData.name = req.body.name;
+      if (req.body.email !== undefined) updateData.email = req.body.email || null;
+      if (req.body.classId !== undefined) updateData.classId = req.body.classId || null;
+      if (req.body.gender !== undefined) updateData.gender = req.body.gender || null;
+      
+      // Remove undefined fields
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+      
+      const updatedStudent = await storage.updateStudent(id, orgId, updateData);
+      res.json(updatedStudent);
+    } catch (error: any) {
+      console.error("Error updating student:", error);
+      
+      if (error.message && error.message.includes("not found")) {
+        return res.status(404).json({ message: error.message });
+      }
+      
+      if (error.message && error.message.includes("already exists")) {
+        return res.status(400).json({ message: error.message });
+      }
+      
+      if (error.code === "23505" || (error.constraint && error.constraint === "unique_email_per_org")) {
+        const email = req.body.email;
+        return res.status(400).json({ 
+          message: `A student with email ${email} already exists in this organization` 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to update student", error: error.message });
+    }
+  });
+
   // Behavior log routes
   app.get("/api/organizations/:orgId/students/:studentId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
@@ -548,6 +589,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting behavior log category:", error);
       res.status(500).json({ message: "Failed to delete behavior log category", error: error.message });
+    }
+  });
+
+  // Class routes
+  app.get("/api/organizations/:orgId/classes", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const includeArchived = req.query.includeArchived === "true";
+      const allClasses = await storage.getClasses(orgId);
+      const classes = includeArchived ? allClasses : allClasses.filter(c => !c.isArchived);
+      res.json(classes);
+    } catch (error: any) {
+      console.error("Error fetching classes:", error);
+      res.status(500).json({ message: "Failed to fetch classes", error: error.message });
+    }
+  });
+
+  app.get("/api/organizations/:orgId/classes/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const classData = await storage.getClass(id, orgId);
+      if (!classData) {
+        return res.status(404).json({ message: "Class not found" });
+      }
+      res.json(classData);
+    } catch (error: any) {
+      console.error("Error fetching class:", error);
+      res.status(500).json({ message: "Failed to fetch class", error: error.message });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/classes", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const classData = {
+        organizationId: orgId,
+        name: req.body.name,
+        description: req.body.description || null,
+        isArchived: req.body.isArchived ?? false,
+      };
+      const newClass = await storage.createClass(classData);
+      res.json(newClass);
+    } catch (error: any) {
+      console.error("Error creating class:", error);
+      res.status(500).json({ message: "Failed to create class", error: error.message });
+    }
+  });
+
+  app.patch("/api/organizations/:orgId/classes/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const updateData: any = {};
+      
+      if (req.body.name !== undefined) updateData.name = req.body.name;
+      if (req.body.description !== undefined) updateData.description = req.body.description || null;
+      if (req.body.isArchived !== undefined) updateData.isArchived = req.body.isArchived;
+      
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+
+      const updatedClass = await storage.updateClass(id, orgId, updateData);
+      res.json(updatedClass);
+    } catch (error: any) {
+      console.error("Error updating class:", error);
+      if (error.message?.includes("not found")) {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to update class", error: error.message });
+      }
+    }
+  });
+
+  app.delete("/api/organizations/:orgId/classes/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      await storage.deleteClass(id, orgId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting class:", error);
+      if (error.message?.includes("assigned students")) {
+        res.status(400).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to delete class", error: error.message });
+      }
     }
   });
 

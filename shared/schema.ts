@@ -8,6 +8,7 @@ import {
   varchar,
   text,
   uniqueIndex,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -78,13 +79,33 @@ export const insertOrganizationUserSchema = createInsertSchema(organizationUsers
 export type InsertOrganizationUser = z.infer<typeof insertOrganizationUserSchema>;
 export type OrganizationUser = typeof organizationUsers.$inferSelect;
 
+// Classes table
+export const classes = pgTable("classes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  isArchived: boolean("is_archived").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertClassSchema = createInsertSchema(classes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertClass = z.infer<typeof insertClassSchema>;
+export type Class = typeof classes.$inferSelect;
+
 // Students table
 export const students = pgTable("students", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }),
-  class: varchar("class", { length: 100 }),
+  classId: varchar("class_id").references(() => classes.id),
   gender: varchar("gender", { length: 50 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

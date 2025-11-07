@@ -10,9 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Users, Bell, FileText, Plus, Trash2, Edit } from "lucide-react";
+import { Building2, Users, Bell, FileText, Plus, Trash2, Edit, GraduationCap } from "lucide-react";
 import { CategoryDialog } from "@/components/CategoryDialog";
-import type { BehaviorLogCategory } from "@shared/schema";
+import { ClassDialog } from "@/components/ClassDialog";
+import type { BehaviorLogCategory, User, Class } from "@shared/schema";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +25,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+interface OrganizationUser {
+  id: string;
+  userId: string;
+  organizationId: string;
+  role: string;
+  joinedAt: Date | string | null;
+  user: User;
+}
 
 const getColorClass = (color: string | null | undefined): string => {
   const colorMap: Record<string, string> = {
@@ -47,6 +58,21 @@ export default function Settings() {
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editCategory, setEditCategory] = useState<BehaviorLogCategory | null>(null);
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
+  const [isClassDialogOpen, setIsClassDialogOpen] = useState(false);
+  const [editClass, setEditClass] = useState<Class | null>(null);
+  const [deleteClassId, setDeleteClassId] = useState<string | null>(null);
+
+  // Fetch organization users
+  const { data: organizationUsers = [], isLoading: isLoadingUsers } = useQuery<OrganizationUser[]>({
+    queryKey: ["/api/organizations", orgId, "users"],
+    enabled: !!orgId,
+  });
+
+  // Fetch classes
+  const { data: classes = [], isLoading: isLoadingClasses } = useQuery<Class[]>({
+    queryKey: ["/api/organizations", orgId, "classes"],
+    enabled: !!orgId,
+  });
 
   // Organization form state
   const [orgFormData, setOrgFormData] = useState({
@@ -276,6 +302,173 @@ export default function Settings() {
     }
   };
 
+  // Create class mutation with optimistic updates
+  const createClass = useMutation({
+    mutationFn: async (data: { name: string; description: string | null; isArchived: boolean }) => {
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/classes`, data);
+      return await res.json();
+    },
+    onMutate: async (newClass) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "classes"] });
+      const previousClasses = queryClient.getQueryData<Class[]>([
+        "/api/organizations",
+        orgId,
+        "classes",
+      ]);
+      const tempId = `temp-${Date.now()}`;
+      const optimisticClass: Class = {
+        id: tempId,
+        organizationId: orgId!,
+        name: newClass.name,
+        description: newClass.description,
+        isArchived: newClass.isArchived,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      if (previousClasses) {
+        queryClient.setQueryData<Class[]>(
+          ["/api/organizations", orgId, "classes"],
+          [...previousClasses, optimisticClass]
+        );
+      }
+      setIsClassDialogOpen(false);
+      return { previousClasses, tempId };
+    },
+    onSuccess: (data: Class, _variables, context) => {
+      const previousClasses = queryClient.getQueryData<Class[]>([
+        "/api/organizations",
+        orgId,
+        "classes",
+      ]);
+      if (previousClasses && context?.tempId) {
+        queryClient.setQueryData<Class[]>(
+          ["/api/organizations", orgId, "classes"],
+          previousClasses.map((c) => (c.id === context.tempId ? data : c))
+        );
+      }
+      toast({
+        title: "Class created",
+        description: "The class has been successfully created.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousClasses) {
+        queryClient.setQueryData<Class[]>(
+          ["/api/organizations", orgId, "classes"],
+          context.previousClasses
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create class. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "classes"] });
+    },
+  });
+
+  // Update class mutation with optimistic updates
+  const updateClass = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Class> }) => {
+      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/classes/${id}`, updates);
+      return await res.json();
+    },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "classes"] });
+      const previousClasses = queryClient.getQueryData<Class[]>([
+        "/api/organizations",
+        orgId,
+        "classes",
+      ]);
+      if (previousClasses) {
+        queryClient.setQueryData<Class[]>(
+          ["/api/organizations", orgId, "classes"],
+          previousClasses.map((c) => (c.id === id ? { ...c, ...updates } : c))
+        );
+      }
+      setIsClassDialogOpen(false);
+      return { previousClasses };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Class updated",
+        description: "The class has been successfully updated.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousClasses) {
+        queryClient.setQueryData<Class[]>(
+          ["/api/organizations", orgId, "classes"],
+          context.previousClasses
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update class. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "classes"] });
+    },
+  });
+
+  // Delete class mutation with optimistic updates
+  const deleteClass = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/organizations/${orgId}/classes/${id}`);
+      return id;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "classes"] });
+      const previousClasses = queryClient.getQueryData<Class[]>([
+        "/api/organizations",
+        orgId,
+        "classes",
+      ]);
+      if (previousClasses) {
+        queryClient.setQueryData<Class[]>(
+          ["/api/organizations", orgId, "classes"],
+          previousClasses.filter((c) => c.id !== id)
+        );
+      }
+      setDeleteClassId(null);
+      return { previousClasses };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Class deleted",
+        description: "The class has been successfully deleted.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousClasses) {
+        queryClient.setQueryData<Class[]>(
+          ["/api/organizations", orgId, "classes"],
+          context.previousClasses
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete class. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "classes"] });
+    },
+  });
+
+  const handleClassSubmit = async (data: { name: string; description: string | null; isArchived: boolean }) => {
+    if (editClass) {
+      updateClass.mutate({ id: editClass.id, updates: data });
+    } else {
+      createClass.mutate(data);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -288,7 +481,7 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="organization" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
+        <TabsList className="grid w-full grid-cols-5 max-w-2xl">
           <TabsTrigger value="organization" data-testid="tab-organization">
             <Building2 className="h-4 w-4 mr-2" />
             Organization
@@ -296,6 +489,10 @@ export default function Settings() {
           <TabsTrigger value="users" data-testid="tab-users">
             <Users className="h-4 w-4 mr-2" />
             Users
+          </TabsTrigger>
+          <TabsTrigger value="classes" data-testid="tab-classes">
+            <GraduationCap className="h-4 w-4 mr-2" />
+            Classes
           </TabsTrigger>
           <TabsTrigger value="notifications" data-testid="tab-notifications">
             <Bell className="h-4 w-4 mr-2" />
@@ -401,39 +598,198 @@ export default function Settings() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="border rounded-lg p-4 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">John Smith</p>
-                    <p className="text-sm text-muted-foreground">john.smith@lincolnhigh.edu</p>
-                    <Badge variant="secondary" className="mt-1">Administrator</Badge>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" data-testid="button-edit-user-1">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" data-testid="button-delete-user-1">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+              {isLoadingUsers ? (
+                <div className="space-y-4">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="border rounded-lg p-4 flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="h-5 w-32 bg-muted animate-pulse rounded mb-2" />
+                        <div className="h-4 w-48 bg-muted animate-pulse rounded mb-2" />
+                        <div className="h-6 w-20 bg-muted animate-pulse rounded" />
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+                        <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              ) : organizationUsers.length === 0 ? (
+                <div className="text-center py-12">
+                  <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground mb-4">No users found in this organization.</p>
+                  <Button data-testid="button-add-first-user">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add First User
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {organizationUsers.map((orgUser) => {
+                    const user = orgUser.user;
+                    const displayName = user.firstName && user.lastName
+                      ? `${user.firstName} ${user.lastName}`
+                      : user.email || "Unknown User";
+                    const initials = user.firstName && user.lastName
+                      ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+                      : user.email?.[0]?.toUpperCase() || "U";
+                    const roleLabel = orgUser.role === "owner" 
+                      ? "Owner" 
+                      : orgUser.role === "admin" 
+                      ? "Administrator" 
+                      : "Teacher";
+                    const roleVariant = orgUser.role === "owner" 
+                      ? "default" 
+                      : orgUser.role === "admin" 
+                      ? "secondary" 
+                      : "outline";
 
-                <div className="border rounded-lg p-4 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Sarah Johnson</p>
-                    <p className="text-sm text-muted-foreground">sarah.johnson@lincolnhigh.edu</p>
-                    <Badge variant="secondary" className="mt-1">Teacher</Badge>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" data-testid="button-edit-user-2">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" data-testid="button-delete-user-2">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                    return (
+                      <div 
+                        key={orgUser.id} 
+                        className="border rounded-lg p-4 flex items-center justify-between"
+                        data-testid={`user-item-${orgUser.userId}`}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className="text-sm">
+                              {initials}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{displayName}</p>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                            <Badge variant={roleVariant} className="mt-1">
+                              {roleLabel}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            data-testid={`button-edit-user-${orgUser.userId}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-destructive hover:text-destructive" 
+                            data-testid={`button-delete-user-${orgUser.userId}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="classes" className="mt-6 space-y-6">
+          <Card data-testid="card-class-management">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Class Management</CardTitle>
+                  <CardDescription>
+                    Manage classes for your organization. Students can be assigned to classes.
+                  </CardDescription>
+                </div>
+                <Button 
+                  onClick={() => {
+                    setEditClass(null);
+                    setIsClassDialogOpen(true);
+                  }}
+                  data-testid="button-add-class"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Class
+                </Button>
               </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingClasses ? (
+                <div className="space-y-4">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="border rounded-lg p-4 flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="h-5 w-32 bg-muted animate-pulse rounded mb-2" />
+                        <div className="h-4 w-48 bg-muted animate-pulse rounded" />
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+                        <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : classes.length === 0 ? (
+                <div className="text-center py-12">
+                  <GraduationCap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground mb-4">No classes found. Create your first class to get started.</p>
+                  <Button 
+                    onClick={() => {
+                      setEditClass(null);
+                      setIsClassDialogOpen(true);
+                    }}
+                    data-testid="button-add-first-class"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add First Class
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {classes.map((classItem) => (
+                    <div 
+                      key={classItem.id} 
+                      className={`border rounded-lg p-4 flex items-center justify-between ${
+                        classItem.isArchived ? "opacity-60" : ""
+                      }`}
+                      data-testid={`class-item-${classItem.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{classItem.name}</p>
+                          {classItem.isArchived && (
+                            <Badge variant="secondary" className="text-xs">Archived</Badge>
+                          )}
+                        </div>
+                        {classItem.description && (
+                          <p className="text-sm text-muted-foreground mt-1">{classItem.description}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => {
+                            setEditClass(classItem);
+                            setIsClassDialogOpen(true);
+                          }}
+                          data-testid={`button-edit-class-${classItem.id}`}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive hover:text-destructive" 
+                          onClick={() => setDeleteClassId(classItem.id)}
+                          data-testid={`button-delete-class-${classItem.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -593,7 +949,13 @@ export default function Settings() {
         category={editCategory}
         isPending={editCategory ? updateCategory.isPending : createCategory.isPending}
       />
-
+      <ClassDialog
+        open={isClassDialogOpen}
+        onOpenChange={setIsClassDialogOpen}
+        onSubmit={handleClassSubmit}
+        classData={editClass}
+        isPending={editClass ? updateClass.isPending : createClass.isPending}
+      />
       <AlertDialog open={!!deleteCategoryId} onOpenChange={(open) => !open && setDeleteCategoryId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -607,6 +969,25 @@ export default function Settings() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteCategoryId && deleteCategory.mutate(deleteCategoryId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={!!deleteClassId} onOpenChange={(open) => !open && setDeleteClassId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Class</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this class? This action cannot be undone. If students are assigned to this class, you must unassign them first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteClassId && deleteClass.mutate(deleteClassId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,14 +10,15 @@ import { MeetingNoteCard } from "@/components/MeetingNoteCard";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
 import { AddFollowUpDialog } from "@/components/AddFollowUpDialog";
 import { AddMeetingDialog } from "@/components/AddMeetingDialog";
+import { AddStudentDialog } from "@/components/AddStudentDialog";
 import { KanbanBoard } from "@/components/KanbanBoard";
-import { ArrowLeft, Plus, Mail, GraduationCap } from "lucide-react";
+import { ArrowLeft, Plus, Mail, GraduationCap, Edit } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Student, BehaviorLog, MeetingNote, FollowUp, BehaviorLogCategory } from "@shared/schema";
+import type { Student, BehaviorLog, MeetingNote, FollowUp, BehaviorLogCategory, Class } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function StudentProfile() {
@@ -33,6 +34,7 @@ export default function StudentProfile() {
   const [isAddFollowUpDialogOpen, setIsAddFollowUpDialogOpen] = useState(false);
   const [editFollowUp, setEditFollowUp] = useState<FollowUp | null>(null);
   const [isAddMeetingDialogOpen, setIsAddMeetingDialogOpen] = useState(false);
+  const [isEditStudentDialogOpen, setIsEditStudentDialogOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch student data
@@ -64,6 +66,21 @@ export default function StudentProfile() {
     queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
     enabled: !!orgId,
   });
+
+  // Fetch classes
+  const { data: classes = [] } = useQuery<Class[]>({
+    queryKey: ["/api/organizations", orgId, "classes"],
+    enabled: !!orgId,
+  });
+
+  // Create a map of classId to className for quick lookup
+  const classMap = useMemo(() => {
+    const map = new Map<string, string>();
+    classes.forEach((c) => {
+      map.set(c.id, c.name);
+    });
+    return map;
+  }, [classes]);
 
   const isLoading = isLoadingStudent || isLoadingLogs || isLoadingNotes || isLoadingFollowUps;
 
@@ -646,9 +663,20 @@ export default function StudentProfile() {
               <AvatarFallback className="text-2xl">{getInitials()}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <h1 className="text-3xl font-semibold mb-4" data-testid="text-student-name">
-                {student.name}
-              </h1>
+              <div className="flex items-center justify-between mb-4">
+                <h1 className="text-3xl font-semibold" data-testid="text-student-name">
+                  {student.name}
+                </h1>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditStudentDialogOpen(true)}
+                  data-testid="button-edit-student"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {student.email && (
                   <div className="flex items-center gap-2">
@@ -656,10 +684,10 @@ export default function StudentProfile() {
                     <span className="text-sm" data-testid="text-student-email">{student.email}</span>
                   </div>
                 )}
-                {student.class && (
+                {student.classId && classMap.get(student.classId) && (
                   <div className="flex items-center gap-2">
                     <GraduationCap className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm" data-testid="text-student-class">{student.class}</span>
+                    <span className="text-sm" data-testid="text-student-class">{classMap.get(student.classId)}</span>
                   </div>
                 )}
               </div>
@@ -871,6 +899,17 @@ export default function StudentProfile() {
         onSubmit={async (data) => createMeetingNote.mutate(data)}
         isPending={createMeetingNote.isPending}
       />
+
+      {orgId && (
+        <AddStudentDialog
+          open={isEditStudentDialogOpen}
+          organizationId={orgId}
+          student={student}
+          onOpenChange={(open) => {
+            setIsEditStudentDialogOpen(open);
+          }}
+        />
+      )}
     </div>
   );
 }

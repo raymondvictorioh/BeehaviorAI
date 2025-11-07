@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { StudentCard } from "@/components/StudentCard";
 import { AddStudentDialog } from "@/components/AddStudentDialog";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Plus, Search } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
-import type { Student } from "@shared/schema";
+import type { Student, Class } from "@shared/schema";
 
 // Skeleton loader for students page
 function StudentsSkeleton() {
@@ -43,6 +43,20 @@ export default function Students() {
     queryKey: ["/api/organizations", orgId, "students"],
     enabled: !!orgId,
   });
+
+  const { data: classes = [] } = useQuery<Class[]>({
+    queryKey: ["/api/organizations", orgId, "classes"],
+    enabled: !!orgId,
+  });
+
+  // Create a map of classId to className for quick lookup
+  const classMap = useMemo(() => {
+    const map = new Map<string, string>();
+    classes.forEach((c) => {
+      map.set(c.id, c.name);
+    });
+    return map;
+  }, [classes]);
 
   const filteredStudents = students.filter((student) =>
     student.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -94,19 +108,22 @@ export default function Students() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredStudents.map((student) => (
-            <StudentCard
-              key={student.id}
-              id={student.id}
-              name={student.name}
-              email={student.email ?? ""}
-              class={student.class ?? ""}
-              gender={student.gender ?? ""}
-              logsCount={0}
-              lastActivity=""
-              onClick={() => setLocation(`/students/${student.id}`)}
-            />
-          ))}
+          {filteredStudents.map((student) => {
+            const className = student.classId ? classMap.get(student.classId) || "" : "";
+            return (
+              <StudentCard
+                key={student.id}
+                id={student.id}
+                name={student.name}
+                email={student.email ?? ""}
+                class={className}
+                gender={student.gender ?? ""}
+                logsCount={0}
+                lastActivity=""
+                onClick={() => setLocation(`/students/${student.id}`)}
+              />
+            );
+          })}
         </div>
       )}
 

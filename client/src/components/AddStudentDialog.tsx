@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,33 +17,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Student } from "@shared/schema";
+import type { Student, Class } from "@shared/schema";
 
 interface AddStudentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   organizationId: string;
+  student?: Student | null;
 }
 
 export function AddStudentDialog({
   open,
   onOpenChange,
   organizationId,
+  student,
 }: AddStudentDialogProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [studentClass, setStudentClass] = useState("");
+  const [classId, setClassId] = useState("__none__");
   const [gender, setGender] = useState("");
   const { toast } = useToast();
+  const isEditMode = !!student;
+
+  // Fetch active classes (not archived) for the organization
+  const { data: classes = [], isLoading: isLoadingClasses } = useQuery<Class[]>({
+    queryKey: ["/api/organizations", organizationId, "classes"],
+    enabled: !!organizationId && open,
+  });
+
+  // Filter to only active (non-archived) classes
+  const activeClasses = classes.filter(c => !c.isArchived);
+
+  // Populate form when editing
+  useEffect(() => {
+    if (student && open) {
+      setName(student.name || "");
+      setEmail(student.email || "");
+      setClassId(student.classId || "__none__");
+      setGender(student.gender || "");
+    } else if (!open) {
+      // Reset form when dialog closes
+      setName("");
+      setEmail("");
+      setClassId("__none__");
+      setGender("");
+    }
+  }, [student, open]);
 
   const createStudent = useMutation({
     mutationFn: async (data: {
       name: string;
       email: string;
-      class: string;
+      classId: string | null;
       gender: string;
     }) => {
       const response = await fetch(`/api/organizations/${organizationId}/students`, {
@@ -58,7 +86,7 @@ export function AddStudentDialog({
       return response.json();
     },
     // Optimistic update - immediately add student to UI
-    onMutate: async (newStudent: { name: string; email: string; class: string; gender: string }) => {
+    onMutate: async (newStudent: { name: string; email: string; classId: string | null; gender: string }) => {
       await queryClient.cancelQueries({ queryKey: ["/api/organizations", organizationId, "students"] });
 
       const previousStudents = queryClient.getQueryData<Student[]>([
@@ -73,7 +101,7 @@ export function AddStudentDialog({
         organizationId,
         name: newStudent.name,
         email: newStudent.email || null,
-        class: newStudent.class || null,
+        classId: newStudent.classId || null,
         gender: newStudent.gender || null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -94,7 +122,7 @@ export function AddStudentDialog({
       // Close dialog and reset form immediately
       setName("");
       setEmail("");
-      setStudentClass("");
+      setClassId("__none__");
       setGender("");
       onOpenChange(false);
 
@@ -139,18 +167,146 @@ export function AddStudentDialog({
     },
   });
 
+  const updateStudent = useMutation({
+    mutationFn: async (data: {
+      name: string;
+      email: string;
+      classId: string | null;
+      gender: string;
+    }) => {
+      const res = await apiRequest(
+        "PATCH",
+        `/api/organizations/${organizationId}/students/${student!.id}`,
+        data
+      );
+      return await res.json();
+    },
+    // Optimistic update
+    onMutate: async (updatedData: { name: string; email: string; classId: string | null; gender: string }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", organizationId, "students", student!.id] });
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", organizationId, "students"] });
+
+      const previousStudent = queryClient.getQueryData<Student>([
+        "/api/organizations",
+        organizationId,
+        "students",
+        student!.id,
+      ]);
+
+      const previousStudents = queryClient.getQueryData<Student[]>([
+        "/api/organizations",
+        organizationId,
+        "students",
+      ]);
+
+      // Optimistically update student
+      if (previousStudent) {
+        queryClient.setQueryData<Student>(
+          ["/api/organizations", organizationId, "students", student!.id],
+          { ...previousStudent, ...updatedData, updatedAt: new Date() }
+        );
+      }
+
+      // Optimistically update students list
+      if (previousStudents) {
+        queryClient.setQueryData<Student[]>(
+          ["/api/organizations", organizationId, "students"],
+          previousStudents.map((s) => 
+            s.id === student!.id 
+              ? { ...s, ...updatedData, updatedAt: new Date() }
+              : s
+          )
+        );
+      }
+
+      // Close dialog immediately
+      onOpenChange(false);
+
+      return { previousStudent, previousStudents };
+    },
+    onSuccess: (data: Student) => {
+      // Update both single student and list queries
+      queryClient.setQueryData<Student>(
+        ["/api/organizations", organizationId, "students", student!.id],
+        data
+      );
+
+      const previousStudents = queryClient.getQueryData<Student[]>([
+        "/api/organizations",
+        organizationId,
+        "students",
+      ]);
+
+      if (previousStudents) {
+        queryClient.setQueryData<Student[]>(
+          ["/api/organizations", organizationId, "students"],
+          previousStudents.map((s) => (s.id === student!.id ? data : s))
+        );
+      }
+
+      toast({
+        title: "Student updated",
+        description: "The student has been successfully updated.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      // Revert optimistic updates
+      if (context?.previousStudent) {
+        queryClient.setQueryData<Student>(
+          ["/api/organizations", organizationId, "students", student!.id],
+          context.previousStudent
+        );
+      }
+      if (context?.previousStudents) {
+        queryClient.setQueryData<Student[]>(
+          ["/api/organizations", organizationId, "students"],
+          context.previousStudents
+        );
+      }
+      // Reopen dialog on error
+      onOpenChange(true);
+      
+      // Extract error message - handle both Error objects and string messages
+      let errorMessage = "Failed to update student. Please try again.";
+      if (error instanceof Error) {
+        errorMessage = error.message || errorMessage;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", organizationId, "students"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", organizationId, "students", student!.id] });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createStudent.mutate({ name, email, class: studentClass, gender });
+    // Convert special "no class" value to null
+    const finalClassId = classId === "__none__" || !classId ? null : classId;
+    
+    if (isEditMode) {
+      updateStudent.mutate({ name, email, classId: finalClassId, gender });
+    } else {
+      createStudent.mutate({ name, email, classId: finalClassId, gender });
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="dialog-add-student">
+      <DialogContent data-testid={isEditMode ? "dialog-edit-student" : "dialog-add-student"}>
         <DialogHeader>
-          <DialogTitle>Add New Student</DialogTitle>
+          <DialogTitle>{isEditMode ? "Edit Student" : "Add New Student"}</DialogTitle>
           <DialogDescription>
-            Enter the student's information to create their profile.
+            {isEditMode 
+              ? "Update the student's information." 
+              : "Enter the student's information to create their profile."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -174,24 +330,33 @@ export function AddStudentDialog({
                 placeholder="student@school.edu"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
+                required={!isEditMode}
                 data-testid="input-student-email"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="class">Class</Label>
-              <Input
-                id="class"
-                placeholder="Grade 10A"
-                value={studentClass}
-                onChange={(e) => setStudentClass(e.target.value)}
-                required
-                data-testid="input-student-class"
-              />
+              <Select value={classId || "__none__"} onValueChange={setClassId} disabled={isLoadingClasses}>
+                <SelectTrigger id="class" data-testid="select-student-class">
+                  <SelectValue placeholder={isLoadingClasses ? "Loading classes..." : "Select a class"}>
+                    {classId && classId !== "__none__" 
+                      ? activeClasses.find(c => c.id === classId)?.name || "Select a class"
+                      : "Select a class"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {activeClasses.map((classItem) => (
+                    <SelectItem key={classItem.id} value={classItem.id}>
+                      {classItem.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="gender">Gender</Label>
-              <Select value={gender} onValueChange={setGender} required>
+              <Select value={gender} onValueChange={setGender} required={!isEditMode}>
                 <SelectTrigger id="gender" data-testid="select-student-gender">
                   <SelectValue placeholder="Select gender" />
                 </SelectTrigger>
@@ -215,10 +380,12 @@ export function AddStudentDialog({
             </Button>
             <Button 
               type="submit" 
-              disabled={createStudent.isPending}
+              disabled={isEditMode ? updateStudent.isPending : createStudent.isPending}
               data-testid="button-submit-student"
             >
-              {createStudent.isPending ? "Adding..." : "Add Student"}
+              {isEditMode 
+                ? (updateStudent.isPending ? "Updating..." : "Update Student")
+                : (createStudent.isPending ? "Adding..." : "Add Student")}
             </Button>
           </DialogFooter>
         </form>
