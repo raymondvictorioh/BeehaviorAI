@@ -26,6 +26,15 @@ BehaviorHub is a SaaS application for school behavior management, designed to he
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+**November 7, 2025 - Authentication & Logout Improvements:**
+- Removed automatic re-authentication in development mode
+- Logout now properly destroys sessions in both development and production environments
+- Users must manually visit `/api/login` to authenticate in development mode
+- Session cookies are properly cleared on logout
+- No auto-login occurs after logout, page refresh, or waiting periods
+
 ## System Architecture
 
 ### Frontend Architecture
