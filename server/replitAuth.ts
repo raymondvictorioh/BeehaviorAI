@@ -132,39 +132,18 @@ export async function setupAuth(app: Express) {
     });
 
     app.get("/api/logout", (req, res) => {
-      req.logout(() => {
-        // Set a cookie to prevent immediate auto-login after explicit logout
-        res.cookie("preventAutoLogin", "true", {
-          maxAge: 5000, // 5 seconds - enough time to show logged out state
-          httpOnly: true
-        });
-        res.redirect("/");
-      });
-    });
-
-    // Auto-authenticate on first request in local dev
-    app.use(async (req, res, next) => {
-      if (!req.isAuthenticated()) {
-        // Skip auto-login if user just logged out explicitly
-        if (req.cookies.preventAutoLogin) {
-          return next();
+      req.logout((err) => {
+        if (err) {
+          console.error("Logout error:", err);
         }
-
-        const mockUser = {
-          claims: {
-            sub: LOCAL_USER_ID,
-            email: "local-dev@example.com",
-            first_name: "Local",
-            last_name: "Developer",
-          },
-          expires_at: Math.floor(Date.now() / 1000) + 86400 * 7,
-        };
-        req.login(mockUser, () => {
-          next();
+        req.session.destroy((err) => {
+          if (err) {
+            console.error("Session destroy error:", err);
+          }
+          res.clearCookie("connect.sid");
+          res.redirect("/");
         });
-      } else {
-        next();
-      }
+      });
     });
 
     return; // Skip OIDC setup
@@ -224,40 +203,31 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+    req.logout((err) => {
+      if (err) {
+        console.error("Logout error:", err);
+      }
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("Session destroy error:", err);
+        }
+        res.clearCookie("connect.sid");
+        res.redirect(
+          client.buildEndSessionUrl(config, {
+            client_id: process.env.REPL_ID!,
+            post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
+          }).href
+        );
+      });
     });
   });
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  // Local development bypass
+  // Local development - no auto-login, require explicit authentication
   if (isLocalDevelopment()) {
-    // Ensure user is authenticated in local dev (should be auto-authenticated)
     if (!req.isAuthenticated()) {
-      // Skip auto-login if user just logged out explicitly
-      if (req.cookies.preventAutoLogin) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const mockUser = {
-        claims: {
-          sub: LOCAL_USER_ID,
-          email: "local-dev@example.com",
-          first_name: "Local",
-          last_name: "Developer",
-        },
-        expires_at: Math.floor(Date.now() / 1000) + 86400 * 7,
-      };
-      req.login(mockUser, () => {
-        return next();
-      });
-      return;
+      return res.status(401).json({ message: "Unauthorized" });
     }
     return next();
   }
