@@ -133,6 +133,11 @@ export async function setupAuth(app: Express) {
 
     app.get("/api/logout", (req, res) => {
       req.logout(() => {
+        // Set a cookie to prevent immediate auto-login after explicit logout
+        res.cookie("preventAutoLogin", "true", {
+          maxAge: 5000, // 5 seconds - enough time to show logged out state
+          httpOnly: true
+        });
         res.redirect("/");
       });
     });
@@ -140,6 +145,11 @@ export async function setupAuth(app: Express) {
     // Auto-authenticate on first request in local dev
     app.use(async (req, res, next) => {
       if (!req.isAuthenticated()) {
+        // Skip auto-login if user just logged out explicitly
+        if (req.cookies.preventAutoLogin) {
+          return next();
+        }
+
         const mockUser = {
           claims: {
             sub: LOCAL_USER_ID,
@@ -230,6 +240,11 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   if (isLocalDevelopment()) {
     // Ensure user is authenticated in local dev (should be auto-authenticated)
     if (!req.isAuthenticated()) {
+      // Skip auto-login if user just logged out explicitly
+      if (req.cookies.preventAutoLogin) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
       const mockUser = {
         claims: {
           sub: LOCAL_USER_ID,
