@@ -11,10 +11,11 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
 
 const menuItems = [
   {
@@ -43,8 +44,32 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { user, isLoading } = useAuth();
+  const queryClient = useQueryClient();
   
   const organizationName = user?.organizations?.[0]?.name;
+  const orgId = user?.organizations?.[0]?.id;
+
+  // Prefetch data on hover
+  const handleMouseEnter = (url: string) => {
+    if (!orgId) return;
+    
+    if (url === "/") {
+      // Prefetch dashboard stats
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "stats"],
+      });
+    } else if (url === "/students") {
+      // Prefetch students list
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "students"],
+      });
+    } else if (url === "/settings") {
+      // Prefetch categories for settings
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
+      });
+    }
+  };
 
   return (
     <Sidebar>
@@ -69,10 +94,14 @@ export function AppSidebar() {
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
-                    <a href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>
+                    <Link 
+                      href={item.url} 
+                      onMouseEnter={() => handleMouseEnter(item.url)}
+                      data-testid={`link-${item.title.toLowerCase()}`}
+                    >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

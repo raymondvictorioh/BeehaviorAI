@@ -10,6 +10,31 @@ interface DashboardStats {
   positiveLogsPercentage: number;
 }
 
+// Skeleton loader for dashboard
+function DashboardSkeleton() {
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <div className="h-8 w-64 bg-muted animate-pulse rounded mb-2" />
+        <div className="h-4 w-96 bg-muted animate-pulse rounded" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i}>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <div className="h-5 w-32 bg-muted animate-pulse rounded" />
+              <div className="h-4 w-4 bg-muted animate-pulse rounded" />
+            </CardHeader>
+            <CardContent>
+              <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const orgId = user?.organizations?.[0]?.id;
@@ -47,14 +72,7 @@ export default function Dashboard() {
   ];
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

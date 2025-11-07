@@ -155,6 +155,10 @@ export class DatabaseStorage implements IStorage {
     return orgs;
   }
 
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
   async getDashboardStats(organizationId: string): Promise<DashboardStats> {
     const studentsData = await db.select().from(students).where(eq(students.organizationId, organizationId));
     const followUpsData = await db.select().from(followUps).where(eq(followUps.organizationId, organizationId));
@@ -331,11 +335,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateFollowUp(id: string, organizationId: string, followUp: Partial<InsertFollowUp>): Promise<FollowUp> {
+    console.log(`[DEBUG Storage] updateFollowUp called with:`, {
+      id,
+      organizationId,
+      followUp,
+      followUpKeys: Object.keys(followUp),
+    });
+
+    // Filter out undefined values to ensure we only update provided fields
+    // This prevents null constraint violations when doing partial updates
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    // Only include fields that are explicitly provided (not undefined)
+    if (followUp.title !== undefined) updateData.title = followUp.title;
+    if (followUp.description !== undefined) updateData.description = followUp.description;
+    if (followUp.status !== undefined) updateData.status = followUp.status;
+    if (followUp.assignee !== undefined) updateData.assignee = followUp.assignee;
+    if (followUp.dueDate !== undefined) updateData.dueDate = followUp.dueDate;
+
+    console.log(`[DEBUG Storage] Final updateData to be sent to DB:`, updateData);
+
     const [updated] = await db
       .update(followUps)
-      .set(followUp)
+      .set(updateData)
       .where(and(eq(followUps.id, id), eq(followUps.organizationId, organizationId)))
       .returning();
+
+    if (!updated) {
+      throw new Error("Follow-up not found");
+    }
+
+    console.log(`[DEBUG Storage] Follow-up updated successfully:`, updated);
     return updated;
   }
 

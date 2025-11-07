@@ -760,10 +760,19 @@ export default function StudentProfile() {
           ) : (
             <KanbanBoard
               followUps={followUps}
+              organizationId={orgId}
               onStatusChange={(followUp, newStatus) => {
+                // Send the full follow-up payload with updated status
+                // This ensures all fields are included and prevents null constraint violations
                 updateFollowUp.mutate({
                   id: followUp.id,
-                  updates: { status: newStatus },
+                  updates: {
+                    title: followUp.title,
+                    description: followUp.description || null,
+                    status: newStatus,
+                    assignee: followUp.assignee || null,
+                    dueDate: followUp.dueDate || null,
+                  },
                 });
               }}
               onEdit={(followUp) => {
@@ -833,6 +842,7 @@ export default function StudentProfile() {
 
       <AddFollowUpDialog
         open={isAddFollowUpDialogOpen}
+        organizationId={orgId}
         onOpenChange={(open) => {
           setIsAddFollowUpDialogOpen(open);
           if (!open) {

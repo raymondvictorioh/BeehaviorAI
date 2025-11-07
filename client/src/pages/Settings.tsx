@@ -83,21 +83,8 @@ export default function Settings() {
         throw new Error("Organization ID is required");
       }
 
-      const response = await fetch(`/api/organizations/${orgId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `Failed to update organization: ${response.status}`);
-      }
-
-      return await response.json();
+      const res = await apiRequest("PATCH", `/api/organizations/${orgId}`, data);
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });

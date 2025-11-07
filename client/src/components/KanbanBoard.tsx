@@ -1,10 +1,11 @@
-import { useState, useRef } from "react";
-import { FollowUp } from "@shared/schema";
+import { useState, useRef, useMemo } from "react";
+import { FollowUp, type User } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { MoreVertical, Calendar, X } from "lucide-react";
+import { MoreVertical, Calendar, X, GripVertical } from "lucide-react";
 import { format, addDays } from "date-fns";
 import {
   DropdownMenu,
@@ -15,6 +16,13 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
+
+interface OrganizationUser {
+  userId: string;
+  user: User;
+  role: string;
+}
+
 import {
   DndContext,
   DragEndEvent,
@@ -24,8 +32,9 @@ import {
   useSensors,
   PointerSensor,
   closestCorners,
+  useDraggable,
+  useDroppable,
 } from "@dnd-kit/core";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
 interface KanbanBoardProps {
@@ -33,6 +42,7 @@ interface KanbanBoardProps {
   onEdit?: (followUp: FollowUp) => void;
   onDelete?: (followUp: FollowUp) => void;
   onStatusChange?: (followUp: FollowUp, newStatus: string) => void;
+  organizationId?: string;
 }
 
 const statusColumns = [
@@ -92,13 +102,27 @@ function formatDueDateText(dueDate: Date | string | null): string {
 }
 
 // Draggable Follow-up Card Component
-function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange }: {
+function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, userMap }: {
   followUp: FollowUp;
   onEdit?: (followUp: FollowUp) => void;
   onDelete?: (followUp: FollowUp) => void;
   onStatusChange?: (followUp: FollowUp, newStatus: string) => void;
+  userMap?: Map<string, User>;
 }) {
   const dueDateStatus = getDueDateStatus(followUp.dueDate);
+  
+  // Get user info from assignee ID
+  const assignedUser = followUp.assignee ? userMap?.get(followUp.assignee) : null;
+  const assigneeDisplayName = assignedUser
+    ? (assignedUser.firstName && assignedUser.lastName
+        ? `${assignedUser.firstName} ${assignedUser.lastName}`
+        : assignedUser.email)
+    : followUp.assignee; // Fallback to ID if user not found
+  const assigneeInitials = assignedUser
+    ? (assignedUser.firstName && assignedUser.lastName
+        ? `${assignedUser.firstName[0]}${assignedUser.lastName[0]}`.toUpperCase()
+        : assignedUser.email?.[0]?.toUpperCase() || "U")
+    : followUp.assignee?.substring(0, 2).toUpperCase() || "U";
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: followUp.id,
     data: {
@@ -109,63 +133,91 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange }: {
 
   const style = {
     transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.4 : 1,
+    transition: isDragging ? 'none' : 'opacity 0.2s ease',
   };
 
   // Track if user actually dragged (moved more than threshold)
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
   const hasDragged = useRef(false);
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    dragStartPos.current = { x: e.clientX, y: e.clientY };
-    hasDragged.current = false;
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (dragStartPos.current) {
-      const deltaX = Math.abs(e.clientX - dragStartPos.current.x);
-      const deltaY = Math.abs(e.clientY - dragStartPos.current.y);
-      // If moved more than 8px (matching dnd-kit activation constraint), consider it a drag
-      if (deltaX > 8 || deltaY > 8) {
-        hasDragged.current = true;
-      }
-    }
-  };
-
   const handleCardClick = (e: React.MouseEvent) => {
-    // Don't trigger edit if clicking on the dropdown menu or its children
-    if ((e.target as HTMLElement).closest('[data-dropdown-trigger]') || 
-        (e.target as HTMLElement).closest('[role="menuitem"]')) {
+    // Don't trigger edit if:
+    // 1. Clicking on the dropdown menu or its children
+    // 2. We just finished dragging
+    // 3. Currently dragging
+    if (
+      (e.target as HTMLElement).closest('[data-dropdown-trigger]') || 
+      (e.target as HTMLElement).closest('[role="menuitem"]') ||
+      hasDragged.current ||
+      isDragging
+    ) {
       return;
     }
     
     // Only trigger edit if we didn't drag (click without significant movement)
-    if (!hasDragged.current && !isDragging && onEdit) {
+    if (onEdit) {
       onEdit(followUp);
     }
-    
-    // Reset drag tracking
-    dragStartPos.current = null;
-    hasDragged.current = false;
   };
 
   return (
     <div 
       ref={setNodeRef} 
-      style={style} 
-      {...listeners} 
+      style={style}
+      {...listeners}
       {...attributes}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
     >
       <Card 
         key={followUp.id} 
-        className={`hover-elevate ${isDragging ? "cursor-grabbing" : "cursor-pointer"}`} 
+        className={`hover-elevate transition-shadow ${
+          isDragging 
+            ? "cursor-grabbing shadow-lg scale-105 z-50" 
+            : "cursor-grab hover:shadow-md"
+        }`} 
         data-testid={`followup-card-${followUp.id}`}
         onClick={handleCardClick}
+        onMouseDown={(e) => {
+          // Don't start drag if clicking on interactive elements
+          const target = e.target as HTMLElement;
+          if (
+            target.closest('[data-dropdown-trigger]') ||
+            target.closest('button') ||
+            target.closest('a') ||
+            target.closest('[role="menuitem"]')
+          ) {
+            e.stopPropagation();
+            return;
+          }
+          // Track initial position for click vs drag detection
+          dragStartPos.current = { x: e.clientX, y: e.clientY };
+          hasDragged.current = false;
+        }}
+        onMouseMove={(e) => {
+          // Track if user is actually dragging
+          if (dragStartPos.current) {
+            const deltaX = Math.abs(e.clientX - dragStartPos.current.x);
+            const deltaY = Math.abs(e.clientY - dragStartPos.current.y);
+            // If moved more than 5px, consider it a drag
+            if (deltaX > 5 || deltaY > 5) {
+              hasDragged.current = true;
+            }
+          }
+        }}
+        onMouseUp={() => {
+          // Reset after a short delay to allow click handler to check hasDragged
+          setTimeout(() => {
+            dragStartPos.current = null;
+            hasDragged.current = false;
+          }, 100);
+        }}
       >
         <CardHeader className="p-4">
           <div className="flex items-start justify-between gap-2">
+            {/* Visual drag indicator */}
+            <div className="flex items-center text-muted-foreground mr-1 opacity-50">
+              <GripVertical className="h-4 w-4" />
+            </div>
             <div className="flex-1 min-w-0">
               <CardTitle className="text-sm font-medium line-clamp-2 mb-2">
                 {followUp.title}
@@ -175,15 +227,10 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange }: {
                   <div className="flex items-center gap-1.5" data-testid={`assignee-${followUp.id}`}>
                     <Avatar className="h-5 w-5">
                       <AvatarFallback className="text-[10px] leading-none">
-                        {followUp.assignee
-                          .split(' ')
-                          .map(n => n[0])
-                          .join('')
-                          .toUpperCase()
-                          .slice(0, 2)}
+                        {assigneeInitials}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-xs text-muted-foreground">{followUp.assignee}</span>
+                    <span className="text-xs text-muted-foreground">{assigneeDisplayName}</span>
                   </div>
                 )}
                 {followUp.dueDate && (
@@ -279,13 +326,15 @@ function DroppableColumn({
   followUps, 
   onEdit, 
   onDelete, 
-  onStatusChange 
+  onStatusChange,
+  userMap
 }: {
   column: typeof statusColumns[0];
   followUps: FollowUp[];
   onEdit?: (followUp: FollowUp) => void;
   onDelete?: (followUp: FollowUp) => void;
   onStatusChange?: (followUp: FollowUp, newStatus: string) => void;
+  userMap?: Map<string, User>;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
@@ -309,9 +358,13 @@ function DroppableColumn({
       </div>
       <div
         ref={setNodeRef}
-        className={`rounded-lg p-3 space-y-3 min-h-[200px] transition-colors ${
+        className={`rounded-lg p-3 space-y-3 min-h-[200px] transition-all duration-200 ${
           column.color
-        } ${isOver ? "ring-2 ring-primary ring-offset-2" : ""}`}
+        } ${
+          isOver 
+            ? "ring-2 ring-primary ring-offset-2 bg-opacity-80 scale-[1.02]" 
+            : ""
+        }`}
         data-testid={`column-${column.id}`}
       >
         {columnFollowUps.map((followUp) => (
@@ -321,11 +374,16 @@ function DroppableColumn({
             onEdit={onEdit}
             onDelete={onDelete}
             onStatusChange={onStatusChange}
+            userMap={userMap}
           />
         ))}
         {columnFollowUps.length === 0 && (
-          <div className="text-center text-sm text-muted-foreground py-8">
-            No items
+          <div className={`text-center text-sm py-8 transition-colors ${
+            isOver 
+              ? "text-primary font-medium" 
+              : "text-muted-foreground"
+          }`}>
+            {isOver ? "Drop here" : "No items"}
           </div>
         )}
       </div>
@@ -333,37 +391,72 @@ function DroppableColumn({
   );
 }
 
-export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange, organizationId }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  
+  // Fetch organization users to map user IDs to user info
+  const { data: organizationUsers = [] } = useQuery<OrganizationUser[]>({
+    queryKey: ["/api/organizations", organizationId, "users"],
+    enabled: !!organizationId,
+  });
+
+  // Create a map of user IDs to user objects for quick lookup
+  const userMap = useMemo(() => {
+    const map = new Map<string, User>();
+    organizationUsers.forEach((orgUser) => {
+      map.set(orgUser.userId, orgUser.user);
+    });
+    return map;
+  }, [organizationUsers]);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Require 8px movement before dragging starts
+        distance: 5, // Require 5px movement before dragging starts (reduced for better responsiveness)
       },
     })
   );
 
   const handleDragStart = (event: DragStartEvent) => {
+    console.log('[Kanban] Drag started:', event.active.id);
     setActiveId(event.active.id as string);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    console.log('[Kanban] Drag ended:', { active: active.id, over: over?.id, overData: over?.data.current });
     setActiveId(null);
 
-    if (!over) return;
-
-    const followUpId = active.id as string;
-    const newStatus = over.data.current?.status as string;
-
-    if (!newStatus || newStatus === active.data.current?.followUp?.status) {
+    if (!over) {
+      // Dropped outside a valid drop zone, do nothing
+      console.log('[Kanban] Dropped outside drop zone');
       return;
     }
 
+    // Check if dropped on a column (status change)
+    const newStatus = over.data.current?.status as string;
     const followUp = active.data.current?.followUp as FollowUp;
-    if (followUp && onStatusChange) {
+
+    console.log('[Kanban] Drop details:', { 
+      newStatus, 
+      currentStatus: followUp?.status,
+      followUpId: followUp?.id 
+    });
+
+    // Only update if:
+    // 1. We have a valid status
+    // 2. The status is different from current
+    // 3. We have a follow-up object
+    if (newStatus && followUp && newStatus !== followUp.status && onStatusChange) {
+      console.log('[Kanban] Updating status:', { from: followUp.status, to: newStatus });
       onStatusChange(followUp, newStatus);
+    } else {
+      console.log('[Kanban] Status update skipped:', { 
+        hasNewStatus: !!newStatus,
+        hasFollowUp: !!followUp,
+        statusChanged: newStatus !== followUp?.status,
+        hasHandler: !!onStatusChange
+      });
     }
   };
 
@@ -385,33 +478,43 @@ export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange }: Kan
             onEdit={onEdit}
             onDelete={onDelete}
             onStatusChange={onStatusChange}
+            userMap={userMap}
           />
         ))}
       </div>
-      <DragOverlay>
+      <DragOverlay dropAnimation={{ duration: 200, easing: 'ease-out' }}>
         {activeFollowUp ? (
-          <div className="opacity-90 rotate-2">
-            <Card className="w-64 shadow-lg">
+          <div className="opacity-95 rotate-2 scale-105">
+            <Card className="w-64 shadow-2xl border-2 border-primary">
               <CardHeader className="p-4">
                 <CardTitle className="text-sm font-medium line-clamp-2 mb-2">
                   {activeFollowUp.title}
                 </CardTitle>
                 <div className="flex flex-col gap-1.5">
-                  {activeFollowUp.assignee && (
-                    <div className="flex items-center gap-1.5">
-                      <Avatar className="h-5 w-5">
-                        <AvatarFallback className="text-[10px] leading-none">
-                          {activeFollowUp.assignee
-                            .split(' ')
-                            .map(n => n[0])
-                            .join('')
-                            .toUpperCase()
-                            .slice(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs text-muted-foreground">{activeFollowUp.assignee}</span>
-                    </div>
-                  )}
+                  {activeFollowUp.assignee && (() => {
+                    const assignedUser = userMap.get(activeFollowUp.assignee);
+                    const displayName = assignedUser
+                      ? (assignedUser.firstName && assignedUser.lastName
+                          ? `${assignedUser.firstName} ${assignedUser.lastName}`
+                          : assignedUser.email)
+                      : activeFollowUp.assignee;
+                    const initials = assignedUser
+                      ? (assignedUser.firstName && assignedUser.lastName
+                          ? `${assignedUser.firstName[0]}${assignedUser.lastName[0]}`.toUpperCase()
+                          : assignedUser.email?.[0]?.toUpperCase() || "U")
+                      : activeFollowUp.assignee?.substring(0, 2).toUpperCase() || "U";
+                    
+                    return (
+                      <div className="flex items-center gap-1.5">
+                        <Avatar className="h-5 w-5">
+                          <AvatarFallback className="text-[10px] leading-none">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs text-muted-foreground">{displayName}</span>
+                      </div>
+                    );
+                  })()}
                   {activeFollowUp.dueDate && (
                     <div className="flex items-center gap-1.5">
                       {(() => {

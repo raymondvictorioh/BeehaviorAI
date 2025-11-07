@@ -3,11 +3,33 @@ import { StudentCard } from "@/components/StudentCard";
 import { AddStudentDialog } from "@/components/AddStudentDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 import { Plus, Search } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import type { Student } from "@shared/schema";
+
+// Skeleton loader for students page
+function StudentsSkeleton() {
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <div className="h-8 w-48 bg-muted animate-pulse rounded mb-2" />
+          <div className="h-4 w-64 bg-muted animate-pulse rounded" />
+        </div>
+        <div className="h-10 w-32 bg-muted animate-pulse rounded" />
+      </div>
+      <div className="h-10 w-full bg-muted animate-pulse rounded" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <Card key={i} className="h-48 bg-muted animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Students() {
   const [, setLocation] = useLocation();
@@ -27,14 +49,7 @@ export default function Students() {
   );
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading students...</p>
-        </div>
-      </div>
-    );
+    return <StudentsSkeleton />;
   }
 
   return (

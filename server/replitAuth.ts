@@ -128,6 +128,59 @@ export async function setupAuth(app: Express) {
       });
     });
 
+    // User switcher endpoint for local development
+    // GET /api/local/login/:userId - Login as a specific user from DB
+    app.get("/api/local/login/:userId", async (req, res) => {
+      try {
+        const { userId } = req.params;
+        const user = await storage.getUser(userId);
+        
+        if (!user) {
+          return res.status(404).json({ message: `User with ID ${userId} not found` });
+        }
+
+        // Create mock user object matching the DB user
+        const mockUser = {
+          claims: {
+            sub: user.id,
+            email: user.email,
+            first_name: user.firstName || "",
+            last_name: user.lastName || "",
+          },
+          expires_at: Math.floor(Date.now() / 1000) + 86400 * 7, // 7 days
+        };
+        
+        req.login(mockUser, (err) => {
+          if (err) {
+            return res.status(500).json({ message: "Failed to login" });
+          }
+          res.json({ 
+            message: `Logged in as ${user.email}`,
+            user: {
+              id: user.id,
+              email: user.email,
+              name: `${user.firstName || ""} ${user.lastName || ""}`.trim()
+            }
+          });
+        });
+      } catch (error: any) {
+        console.error("Error in local login:", error);
+        res.status(500).json({ message: error.message || "Failed to login" });
+      }
+    });
+
+    // List all users endpoint for local development
+    // GET /api/local/users - Get all users from DB
+    app.get("/api/local/users", async (req, res) => {
+      try {
+        const allUsers = await storage.getAllUsers();
+        res.json(allUsers);
+      } catch (error: any) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({ message: error.message || "Failed to fetch users" });
+      }
+    });
+
     app.get("/api/logout", (req, res) => {
       req.logout((err) => {
         if (err) {

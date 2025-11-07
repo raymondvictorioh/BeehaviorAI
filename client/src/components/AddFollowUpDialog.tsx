@@ -3,7 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import DOMPurify from "isomorphic-dompurify";
-import { insertFollowUpSchema, type FollowUp } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import { insertFollowUpSchema, type FollowUp, type User } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RichTextEditor } from "./RichTextEditor";
 
+interface OrganizationUser {
+  userId: string;
+  user: User;
+  role: string;
+}
+
 const formSchema = insertFollowUpSchema.extend({
   title: z.string().min(1, "Title is required"),
   status: z.enum(["To-Do", "In-Progress", "Done", "Archived"]).default("To-Do"),
@@ -37,12 +44,16 @@ const formSchema = insertFollowUpSchema.extend({
 
 type FormData = z.infer<typeof formSchema>;
 
+// Special value to represent "no assignee" - Radix UI Select doesn't allow empty strings
+const NO_ASSIGNEE_VALUE = "__none__";
+
 interface AddFollowUpDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: FormData) => Promise<void>;
   isPending?: boolean;
   editFollowUp?: FollowUp | null;
+  organizationId?: string;
 }
 
 const statusOptions = [
@@ -58,9 +69,16 @@ export function AddFollowUpDialog({
   onSubmit,
   isPending = false,
   editFollowUp,
+  organizationId,
 }: AddFollowUpDialogProps) {
   const [description, setDescription] = useState("");
   const isEditMode = !!editFollowUp;
+
+  // Fetch organization users for assignee dropdown
+  const { data: organizationUsers = [], isLoading: isLoadingUsers } = useQuery<OrganizationUser[]>({
+    queryKey: ["/api/organizations", organizationId, "users"],
+    enabled: !!organizationId && open,
+  });
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -68,7 +86,7 @@ export function AddFollowUpDialog({
       title: "",
       description: "",
       status: "To-Do",
-      assignee: "",
+      assignee: NO_ASSIGNEE_VALUE,
       dueDate: undefined,
       organizationId: "",
       studentId: "",
@@ -83,7 +101,7 @@ export function AddFollowUpDialog({
         title: editFollowUp.title || "",
         description: descriptionValue,
         status: (editFollowUp.status as "To-Do" | "In-Progress" | "Done" | "Archived") || "To-Do",
-        assignee: editFollowUp.assignee || "",
+        assignee: editFollowUp.assignee || NO_ASSIGNEE_VALUE,
         dueDate: editFollowUp.dueDate ? new Date(editFollowUp.dueDate) : undefined,
         organizationId: editFollowUp.organizationId || "",
         studentId: editFollowUp.studentId || "",
@@ -96,7 +114,7 @@ export function AddFollowUpDialog({
         title: "",
         description: "",
         status: "To-Do",
-        assignee: "",
+        assignee: NO_ASSIGNEE_VALUE,
         dueDate: undefined,
         organizationId: "",
         studentId: "",
@@ -118,7 +136,8 @@ export function AddFollowUpDialog({
       title: data.title,
       description: sanitizedDescription || null,
       status: data.status || "To-Do",
-      assignee: data.assignee || null,
+      // Convert special "no assignee" value to null
+      assignee: data.assignee === NO_ASSIGNEE_VALUE || !data.assignee ? null : data.assignee,
       dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
     };
     
@@ -202,20 +221,55 @@ export function AddFollowUpDialog({
               <FormField
                 control={form.control}
                 name="assignee"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Assignee (Optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        value={field.value || ""}
-                        placeholder="Enter assignee name"
-                        data-testid="input-assignee"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  // Find selected user for display
+                  const selectedUser = field.value && field.value !== NO_ASSIGNEE_VALUE
+                    ? organizationUsers.find(ou => ou.userId === field.value)?.user
+                    : null;
+                  const selectedDisplayName = selectedUser
+                    ? (selectedUser.firstName && selectedUser.lastName
+                        ? `${selectedUser.firstName} ${selectedUser.lastName}`
+                        : selectedUser.email || "Unknown User")
+                    : "";
+                  
+                  return (
+                    <FormItem>
+                      <FormLabel>Assignee (Optional)</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value || NO_ASSIGNEE_VALUE}
+                        disabled={isLoadingUsers}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-assignee">
+                            <SelectValue placeholder={isLoadingUsers ? "Loading users..." : "Select assignee"}>
+                              {selectedDisplayName || "Select assignee"}
+                            </SelectValue>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={NO_ASSIGNEE_VALUE}>None</SelectItem>
+                          {organizationUsers.map((orgUser) => {
+                            const user = orgUser.user;
+                            const displayName = user.firstName && user.lastName
+                              ? `${user.firstName} ${user.lastName}`
+                              : user.email || "Unknown User";
+                            const displayText = user.email && displayName !== user.email
+                              ? `${displayName} (${user.email})`
+                              : displayName;
+                            
+                            return (
+                              <SelectItem key={orgUser.userId} value={orgUser.userId}>
+                                {displayText}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
             </div>
 

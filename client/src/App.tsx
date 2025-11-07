@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -20,25 +20,44 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sparkles, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import Landing from "@/pages/Landing";
-import Onboarding from "@/pages/Onboarding";
-import Dashboard from "@/pages/Dashboard";
-import Students from "@/pages/Students";
-import StudentProfile from "@/pages/StudentProfile";
-import Reports from "@/pages/Reports";
-import Settings from "@/pages/Settings";
-import NotFound from "@/pages/not-found";
+
+// Lazy load pages for code splitting
+const Landing = lazy(() => import("@/pages/Landing"));
+const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Students = lazy(() => import("@/pages/Students"));
+const StudentProfile = lazy(() => import("@/pages/StudentProfile"));
+const Reports = lazy(() => import("@/pages/Reports"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+
+// Loading skeleton component
+function PageSkeleton() {
+  return (
+    <div className="p-6 space-y-6">
+      <div className="h-8 w-64 bg-muted animate-pulse rounded" />
+      <div className="h-4 w-96 bg-muted animate-pulse rounded" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function AppRouter() {
   return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/students" component={Students} />
-      <Route path="/students/:id" component={StudentProfile} />
-      <Route path="/reports" component={Reports} />
-      <Route path="/settings" component={Settings} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageSkeleton />}>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/students" component={Students} />
+        <Route path="/students/:id" component={StudentProfile} />
+        <Route path="/reports" component={Reports} />
+        <Route path="/settings" component={Settings} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 

@@ -5,6 +5,20 @@ import { setupAuth, isAuthenticated, checkOrganizationAccess } from "./replitAut
 import { getChatCompletion, transcribeAudio, generateMeetingSummary } from "./openai";
 import { insertFollowUpSchema } from "@shared/schema";
 
+const isLocalDevelopment = () => {
+  return process.env.LOCAL_AUTH === "true";
+};
+
+const LOCAL_USER_ID = "local-dev-user-00000000-0000-0000-0000-000000000000";
+
+// Helper function to get userId from request, handling both local dev and production
+function getUserId(req: any): string {
+  if (isLocalDevelopment()) {
+    return req.user?.claims?.sub || req.user?.sub || LOCAL_USER_ID;
+  }
+  return req.user.claims.sub;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -12,7 +26,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -32,7 +46,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Organization routes
   app.post("/api/organizations", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req);
       const { name, code, email, phone, address } = req.body;
 
       const organization = await storage.createOrganization({
@@ -351,44 +365,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/organizations/:orgId/follow-ups/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, id } = req.params;
-      
-      // Prepare update data with proper date formatting (same format as create)
-      const updateData: any = {
-        title: req.body.title,
-        description: req.body.description || null,
-        status: req.body.status || "To-Do",
-        assignee: req.body.assignee || null,
-      };
-      
-      // Convert dueDate string to Date object if provided (same logic as create)
-      if (req.body.dueDate) {
-        updateData.dueDate = new Date(req.body.dueDate);
-      } else {
-        updateData.dueDate = null;
-      }
-      
-      // Remove fields with empty strings (same as create)
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key] === "" || updateData[key] === undefined) {
-          updateData[key] = null;
-        }
+
+      console.log(`[DEBUG] PATCH follow-up request:`, {
+        orgId,
+        followUpId: id,
+        body: req.body,
+        bodyKeys: Object.keys(req.body),
       });
-      
+
+      // Prepare update data - only include fields that are actually provided
+      // This allows partial updates (e.g., only updating status)
+      const updateData: any = {};
+
+      // Only include fields that are present in the request body
+      // IMPORTANT: For required fields like 'title', we should not allow setting them to null/empty
+      if (req.body.title !== undefined) {
+        // Don't allow empty title since it's required in DB
+        if (req.body.title === null || req.body.title === "") {
+          return res.status(400).json({ message: "Title cannot be empty" });
+        }
+        updateData.title = req.body.title;
+      }
+
+      if (req.body.description !== undefined) {
+        updateData.description = req.body.description || null;
+      }
+
+      if (req.body.status !== undefined) {
+        updateData.status = req.body.status;
+      }
+
+      if (req.body.assignee !== undefined) {
+        updateData.assignee = req.body.assignee || null;
+      }
+
+      // Convert dueDate string to Date object if provided
+      if (req.body.dueDate !== undefined) {
+        if (req.body.dueDate) {
+          updateData.dueDate = new Date(req.body.dueDate);
+        } else {
+          updateData.dueDate = null;
+        }
+      }
+
       // Remove fields that shouldn't be updated
       delete updateData.organizationId;
       delete updateData.studentId;
       delete updateData.id;
-      
+
+      // Ensure at least one field is being updated
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No fields provided to update" });
+      }
+
+      console.log(`[DEBUG] Update data prepared:`, updateData);
+
       const updatedFollowUp = await storage.updateFollowUp(id, orgId, updateData);
+      console.log(`[DEBUG] Follow-up updated successfully`);
+
       res.json(updatedFollowUp);
     } catch (error: any) {
       console.error("Error updating follow-up:", error);
-      
+
       // Provide more detailed error messages
       if (error.code === "23503") {
         res.status(400).json({ message: "Invalid organization or follow-up ID" });
       } else if (error.name === "ZodError") {
         res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else if (error.code === "23502") {
+        // NOT NULL constraint violation
+        res.status(400).json({ message: "Failed to update follow-up", error: error.message });
       } else {
         res.status(500).json({ message: "Failed to update follow-up", error: error.message });
       }
