@@ -8,14 +8,11 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
-// Local development detection
+// Local development detection - only bypass OIDC when explicitly enabled
 const isLocalDevelopment = () => {
-  const nodeEnv = process.env.NODE_ENV;
-  const hostname = process.env.HOSTNAME;
-  // Check if we're running in development mode or on localhost
-  return nodeEnv === "development" || 
-         hostname === "localhost" || 
-         process.env.LOCAL_AUTH === "true";
+  // Only use mock local auth when LOCAL_AUTH=true is explicitly set
+  // Otherwise, use real Replit OIDC authentication in both dev and production
+  return process.env.LOCAL_AUTH === "true";
 };
 
 // Local development mock user ID

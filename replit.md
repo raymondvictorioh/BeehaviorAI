@@ -29,9 +29,11 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 **November 7, 2025 - Authentication & Logout Improvements:**
-- Removed automatic re-authentication in development mode
+- **Updated to use real Replit OIDC authentication in development** (same as production)
+- Development mode now shows proper Replit login page with email/password authentication
+- Mock local auth only enabled when `LOCAL_AUTH=true` environment variable is explicitly set
+- Removed automatic re-authentication after logout
 - Logout now properly destroys sessions in both development and production environments
-- Users must manually visit `/api/login` to authenticate in development mode
 - Session cookies are properly cleared on logout
 - No auto-login occurs after logout, page refresh, or waiting periods
 
