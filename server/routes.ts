@@ -58,6 +58,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/organizations/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { name, code, email, phone, address } = req.body;
+
+      console.log(`[DEBUG] Updating organization ${id} with data:`, { name, code, email, phone, address });
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (code !== undefined) updateData.code = code || null;
+      if (email !== undefined) updateData.email = email || null;
+      if (phone !== undefined) updateData.phone = phone || null;
+      if (address !== undefined) updateData.address = address || null;
+
+      const updatedOrganization = await storage.updateOrganization(id, updateData);
+      console.log(`[DEBUG] Organization updated successfully:`, updatedOrganization);
+
+      res.json(updatedOrganization);
+    } catch (error: any) {
+      console.error("Error updating organization:", error);
+      res.status(500).json({ message: error.message || "Failed to update organization" });
+    }
+  });
+
   app.get("/api/organizations/:id/users", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { id } = req.params;

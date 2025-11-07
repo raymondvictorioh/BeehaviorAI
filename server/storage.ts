@@ -42,6 +42,7 @@ export interface IStorage {
   // Organization operations
   createOrganization(org: InsertOrganization): Promise<Organization>;
   getOrganization(id: string): Promise<Organization | undefined>;
+  updateOrganization(id: string, org: Partial<InsertOrganization>): Promise<Organization>;
   getUserOrganizations(userId: string): Promise<Organization[]>;
   getDashboardStats(organizationId: string): Promise<DashboardStats>;
   
@@ -119,6 +120,20 @@ export class DatabaseStorage implements IStorage {
       .from(organizations)
       .where(eq(organizations.id, id));
     return organization;
+  }
+
+  async updateOrganization(id: string, org: Partial<InsertOrganization>): Promise<Organization> {
+    const [updatedOrganization] = await db
+      .update(organizations)
+      .set({ ...org, updatedAt: new Date() })
+      .where(eq(organizations.id, id))
+      .returning();
+
+    if (!updatedOrganization) {
+      throw new Error("Organization not found");
+    }
+
+    return updatedOrganization;
   }
 
   async getUserOrganizations(userId: string): Promise<Organization[]> {

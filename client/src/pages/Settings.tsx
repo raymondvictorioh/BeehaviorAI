@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -42,16 +42,84 @@ const getColorClass = (color: string | null | undefined): string => {
 export default function Settings() {
   const { user } = useAuth();
   const orgId = user?.organizations?.[0]?.id;
+  const organization = user?.organizations?.[0];
   const { toast } = useToast();
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editCategory, setEditCategory] = useState<BehaviorLogCategory | null>(null);
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
+
+  // Organization form state
+  const [orgFormData, setOrgFormData] = useState({
+    name: organization?.name || "",
+    code: organization?.code || "",
+    email: organization?.email || "",
+    phone: organization?.phone || "",
+    address: organization?.address || "",
+  });
+
+  // Update form data when organization data loads
+  useEffect(() => {
+    if (organization) {
+      setOrgFormData({
+        name: organization.name || "",
+        code: organization.code || "",
+        email: organization.email || "",
+        phone: organization.phone || "",
+        address: organization.address || "",
+      });
+    }
+  }, [organization]);
 
   // Fetch categories
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery<BehaviorLogCategory[]>({
     queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
     enabled: !!orgId,
   });
+
+  // Update organization mutation
+  const updateOrganization = useMutation({
+    mutationFn: async (data: typeof orgFormData) => {
+      if (!orgId) {
+        throw new Error("Organization ID is required");
+      }
+
+      const response = await fetch(`/api/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Failed to update organization: ${response.status}`);
+      }
+
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      toast({
+        title: "Organization updated",
+        description: "Your organization details have been successfully updated.",
+      });
+    },
+    onError: (error: Error) => {
+      console.error("Organization update error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update organization. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleOrganizationSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateOrganization.mutate(orgFormData);
+  };
 
   // Create category mutation with optimistic updates
   const createCategory = useMutation({
@@ -260,57 +328,71 @@ export default function Settings() {
                 Update your school's basic information and contact details
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="school-name">School Name</Label>
-                  <Input
-                    id="school-name"
-                    defaultValue="Lincoln High School"
-                    data-testid="input-school-name"
-                  />
+            <CardContent>
+              <form onSubmit={handleOrganizationSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="school-name">School Name</Label>
+                    <Input
+                      id="school-name"
+                      value={orgFormData.name}
+                      onChange={(e) => setOrgFormData({ ...orgFormData, name: e.target.value })}
+                      data-testid="input-school-name"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="school-code">School Code</Label>
+                    <Input
+                      id="school-code"
+                      value={orgFormData.code}
+                      onChange={(e) => setOrgFormData({ ...orgFormData, code: e.target.value })}
+                      data-testid="input-school-code"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="school-code">School Code</Label>
-                  <Input
-                    id="school-code"
-                    defaultValue="LHS-2024"
-                    data-testid="input-school-code"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="school-email">School Email</Label>
+                    <Input
+                      id="school-email"
+                      type="email"
+                      value={orgFormData.email}
+                      onChange={(e) => setOrgFormData({ ...orgFormData, email: e.target.value })}
+                      data-testid="input-school-email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="school-phone">School Phone</Label>
+                    <Input
+                      id="school-phone"
+                      type="tel"
+                      value={orgFormData.phone}
+                      onChange={(e) => setOrgFormData({ ...orgFormData, phone: e.target.value })}
+                      data-testid="input-school-phone"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="school-email">School Email</Label>
+                  <Label htmlFor="school-address">Address</Label>
                   <Input
-                    id="school-email"
-                    type="email"
-                    defaultValue="admin@lincolnhigh.edu"
-                    data-testid="input-school-email"
+                    id="school-address"
+                    value={orgFormData.address}
+                    onChange={(e) => setOrgFormData({ ...orgFormData, address: e.target.value })}
+                    data-testid="input-school-address"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="school-phone">School Phone</Label>
-                  <Input
-                    id="school-phone"
-                    type="tel"
-                    defaultValue="(555) 123-4567"
-                    data-testid="input-school-phone"
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="school-address">Address</Label>
-                <Input
-                  id="school-address"
-                  defaultValue="123 Education Lane, Learning City, ST 12345"
-                  data-testid="input-school-address"
-                />
-              </div>
-
-              <Button data-testid="button-save-organization">Save Changes</Button>
+                <Button
+                  type="submit"
+                  data-testid="button-save-organization"
+                  disabled={updateOrganization.isPending}
+                >
+                  {updateOrganization.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </TabsContent>
