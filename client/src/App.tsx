@@ -23,6 +23,8 @@ import { useAuth } from "@/hooks/useAuth";
 
 // Lazy load pages for code splitting
 const Landing = lazy(() => import("@/pages/Landing"));
+const Login = lazy(() => import("@/pages/Login"));
+const Signup = lazy(() => import("@/pages/Signup"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Students = lazy(() => import("@/pages/Students"));
@@ -80,8 +82,14 @@ function AuthenticatedApp() {
     return "U";
   };
 
-  const handleLogout = () => {
-    window.location.href = "/api/logout";
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   return (
@@ -169,7 +177,16 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-    return <Landing />;
+    return (
+      <Suspense fallback={<PageSkeleton />}>
+        <Switch>
+          <Route path="/signup" component={Signup} />
+          <Route path="/login" component={Login} />
+          <Route path="/" component={Landing} />
+          <Route component={Landing} />
+        </Switch>
+      </Suspense>
+    );
   }
 
   if (user && user.organizations && user.organizations.length === 0) {

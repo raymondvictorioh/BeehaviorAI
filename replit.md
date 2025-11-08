@@ -28,14 +28,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-**November 7, 2025 - Authentication & Logout Improvements:**
-- **Updated to use real Replit OIDC authentication in development** (same as production)
-- Development mode now shows proper Replit login page with email/password authentication
-- Mock local auth only enabled when `LOCAL_AUTH=true` environment variable is explicitly set
-- Removed automatic re-authentication after logout
-- Logout now properly destroys sessions in both development and production environments
-- Session cookies are properly cleared on logout
-- No auto-login occurs after logout, page refresh, or waiting periods
+**November 8, 2025 - Migration to Supabase Authentication:**
+- **Replaced Replit OIDC authentication with Supabase Auth**
+- Email/password authentication using Supabase backend
+- Custom login and signup pages with modern UI
+- Session-based authentication with PostgreSQL session storage
+- Supabase credentials required: `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+- Authentication works identically in development, Replit browser, and production
+- Users table no longer requires `replit_user_id` - uses Supabase user IDs directly
 
 ## System Architecture
 

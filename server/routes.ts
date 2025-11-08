@@ -1,27 +1,174 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated, checkOrganizationAccess } from "./replitAuth";
+import { setupAuth, isAuthenticated, checkOrganizationAccess, supabase } from "./supabaseAuth";
 import { getChatCompletion, transcribeAudio, generateMeetingSummary } from "./openai";
 import { insertFollowUpSchema } from "@shared/schema";
+import { z } from "zod";
 
-const isLocalDevelopment = () => {
-  return process.env.LOCAL_AUTH === "true";
-};
-
-const LOCAL_USER_ID = "local-dev-user-00000000-0000-0000-0000-000000000000";
-
-// Helper function to get userId from request, handling both local dev and production
+// Helper function to get userId from request session
 function getUserId(req: any): string {
-  if (isLocalDevelopment()) {
-    return req.user?.claims?.sub || req.user?.sub || LOCAL_USER_ID;
-  }
-  return req.user.claims.sub;
+  return req.session.supabaseUserId;
 }
+
+// Auth validation schemas
+const signupSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+});
+
+const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+
+  // Supabase Auth routes
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      // Server-side validation
+      const validationResult = signupSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: validationResult.error.errors[0].message 
+        });
+      }
+
+      const { email, password, firstName, lastName } = validationResult.data;
+
+      // Sign up user with Supabase
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      if (!data.user) {
+        return res.status(400).json({ message: "Failed to create user" });
+      }
+
+      // Only authenticate if session exists (email confirmation may be required)
+      if (!data.session) {
+        return res.status(200).json({ 
+          message: "Please check your email to confirm your account",
+          requiresEmailConfirmation: true
+        });
+      }
+
+      // Create user in our database
+      await storage.upsertUser({
+        id: data.user.id,
+        email: data.user.email || email,
+        firstName,
+        lastName,
+        profileImageUrl: null,
+      });
+
+      // Regenerate session to prevent session fixation
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error("Session regeneration error:", err);
+          return res.status(500).json({ message: "Failed to create session" });
+        }
+
+        // Store user ID in new session
+        req.session.supabaseUserId = data.user!.id;
+
+        res.json({ 
+          message: "Signup successful",
+          user: {
+            id: data.user!.id,
+            email: data.user!.email || email,
+            firstName,
+            lastName,
+          }
+        });
+      });
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      res.status(500).json({ message: error.message || "Failed to sign up" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      // Server-side validation
+      const validationResult = loginSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: validationResult.error.errors[0].message 
+        });
+      }
+
+      const { email, password } = validationResult.data;
+
+      // Sign in user with Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        return res.status(401).json({ message: error.message });
+      }
+
+      if (!data.user || !data.session) {
+        return res.status(401).json({ message: "Failed to authenticate" });
+      }
+
+      // Regenerate session to prevent session fixation
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error("Session regeneration error:", err);
+          return res.status(500).json({ message: "Failed to create session" });
+        }
+
+        // Store user ID in new session
+        req.session.supabaseUserId = data.user!.id;
+
+        // Get user from database
+        storage.getUser(data.user!.id).then(user => {
+          res.json({ 
+            message: "Login successful",
+            user
+          });
+        }).catch(error => {
+          console.error("Error fetching user:", error);
+          res.status(500).json({ message: "Failed to fetch user data" });
+        });
+      });
+    } catch (error: any) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: error.message || "Failed to login" });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    try {
+      // Sign out from Supabase
+      await supabase.auth.signOut();
+
+      // Destroy session
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("Session destroy error:", err);
+        }
+        res.clearCookie("connect.sid");
+        res.json({ message: "Logout successful" });
+      });
+    } catch (error: any) {
+      console.error("Logout error:", error);
+      res.status(500).json({ message: error.message || "Failed to logout" });
+    }
+  });
 
   // Auth routes
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {

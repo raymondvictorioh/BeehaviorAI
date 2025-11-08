@@ -1,10 +1,17 @@
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { GraduationCap, Users, FileText, TrendingUp, Sparkles } from "lucide-react";
 
 export default function Landing() {
+  const [, navigate] = useLocation();
+  
   const handleLogin = () => {
-    window.location.href = "/api/login";
+    navigate("/login");
+  };
+  
+  const handleSignup = () => {
+    navigate("/signup");
   };
 
   return (
@@ -16,9 +23,14 @@ export default function Landing() {
             <GraduationCap className="h-8 w-8 text-primary" />
             <h1 className="text-2xl font-bold">Beehave</h1>
           </div>
-          <Button onClick={handleLogin} size="lg" data-testid="button-login">
-            Log In
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleLogin} variant="outline" size="lg" data-testid="button-login">
+              Log In
+            </Button>
+            <Button onClick={handleSignup} size="lg" data-testid="button-signup">
+              Sign Up
+            </Button>
+          </div>
         </header>
 
         {/* Hero Section */}
@@ -30,7 +42,7 @@ export default function Landing() {
             Track behavior, generate AI-powered insights, and support student success
             with our comprehensive behavior management platform.
           </p>
-          <Button onClick={handleLogin} size="lg" className="text-lg px-8 py-6" data-testid="button-get-started">
+          <Button onClick={handleSignup} size="lg" className="text-lg px-8 py-6" data-testid="button-get-started">
             Get Started Free
           </Button>
         </div>
@@ -88,7 +100,7 @@ export default function Landing() {
               <p className="text-muted-foreground mb-6">
                 Join schools already using Beehave to support student success.
               </p>
-              <Button onClick={handleLogin} size="lg" data-testid="button-cta">
+              <Button onClick={handleSignup} size="lg" data-testid="button-cta">
                 Start Your Free Trial
               </Button>
             </CardContent>
