@@ -190,7 +190,11 @@ function AppContent() {
   }
 
   if (user && user.organizations && user.organizations.length === 0) {
-    return <Onboarding />;
+    return (
+      <Suspense fallback={<PageSkeleton />}>
+        <Onboarding />
+      </Suspense>
+    );
   }
 
   return <AuthenticatedApp />;
