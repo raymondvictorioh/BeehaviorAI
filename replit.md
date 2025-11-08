@@ -36,6 +36,7 @@ Preferred communication style: Simple, everyday language.
 - Supabase credentials required: `SUPABASE_URL` and `SUPABASE_ANON_KEY`
 - Authentication works identically in development, Replit browser, and production
 - Users table no longer requires `replit_user_id` - uses Supabase user IDs directly
+- **Security improvements:** CSRF protection with sameSite=strict cookies, session regeneration on login/signup, server-side Zod validation for auth payloads, email verification handling
 
 ## System Architecture
 

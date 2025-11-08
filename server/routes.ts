@@ -52,25 +52,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (!data.user) {
+        console.error("Supabase signup failed: no user returned");
         return res.status(400).json({ message: "Failed to create user" });
+      }
+
+      console.log("Supabase signup successful, user ID:", data.user.id);
+      console.log("Email confirmation required:", !data.session);
+      
+      // Always create user in our database, regardless of email confirmation status
+      try {
+        const userRecord = await storage.upsertUser({
+          id: data.user.id,
+          email: data.user.email || email,
+          firstName,
+          lastName,
+          profileImageUrl: null,
+        });
+        console.log("User successfully persisted to database:", userRecord.id);
+      } catch (dbError: any) {
+        console.error("Failed to persist user to database:", dbError);
+        // Continue anyway - user exists in Supabase
       }
 
       // Only authenticate if session exists (email confirmation may be required)
       if (!data.session) {
+        console.log("Email confirmation required, not creating session");
         return res.status(200).json({ 
           message: "Please check your email to confirm your account",
           requiresEmailConfirmation: true
         });
       }
-
-      // Create user in our database
-      await storage.upsertUser({
-        id: data.user.id,
-        email: data.user.email || email,
-        firstName,
-        lastName,
-        profileImageUrl: null,
-      });
 
       // Regenerate session to prevent session fixation
       req.session.regenerate((err) => {
@@ -125,7 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Regenerate session to prevent session fixation
-      req.session.regenerate((err) => {
+      req.session.regenerate(async (err) => {
         if (err) {
           console.error("Session regeneration error:", err);
           return res.status(500).json({ message: "Failed to create session" });
@@ -134,16 +145,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Store user ID in new session
         req.session.supabaseUserId = data.user!.id;
 
-        // Get user from database
-        storage.getUser(data.user!.id).then(user => {
+        try {
+          // Get user from database
+          let user = await storage.getUser(data.user!.id);
+          
+          // Defensive: If user doesn't exist locally (shouldn't happen), create it
+          if (!user) {
+            console.log("User not found in local storage, creating from Supabase data");
+            await storage.upsertUser({
+              id: data.user!.id,
+              email: data.user!.email!,
+              firstName: data.user!.user_metadata?.first_name || "",
+              lastName: data.user!.user_metadata?.last_name || "",
+              profileImageUrl: null,
+            });
+            user = await storage.getUser(data.user!.id);
+          }
+          
           res.json({ 
             message: "Login successful",
             user
           });
-        }).catch(error => {
+        } catch (error) {
           console.error("Error fetching user:", error);
           res.status(500).json({ message: "Failed to fetch user data" });
-        });
+        }
       });
     } catch (error: any) {
       console.error("Login error:", error);
