@@ -4,13 +4,27 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+// Initialize Supabase client with environment-specific configuration
+// Development uses DEV_SUPABASE_* variables, production uses PROD_SUPABASE_* variables
+const isDevelopment = process.env.NODE_ENV === "development";
+
+const supabaseUrl = isDevelopment 
+  ? (process.env.DEV_SUPABASE_URL || process.env.SUPABASE_URL)
+  : (process.env.PROD_SUPABASE_URL || process.env.SUPABASE_URL);
+
+const supabaseAnonKey = isDevelopment
+  ? (process.env.DEV_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)
+  : (process.env.PROD_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY);
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables");
+  const envPrefix = isDevelopment ? "DEV_" : "PROD_";
+  throw new Error(
+    `Missing Supabase credentials for ${isDevelopment ? "development" : "production"}. ` +
+    `Please set ${envPrefix}SUPABASE_URL and ${envPrefix}SUPABASE_ANON_KEY environment variables.`
+  );
 }
+
+console.log(`Using Supabase project for ${isDevelopment ? "development" : "production"}: ${supabaseUrl}`);
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

@@ -33,7 +33,10 @@ Preferred communication style: Simple, everyday language.
 - Email/password authentication using Supabase backend
 - Custom login and signup pages with modern UI
 - Session-based authentication with PostgreSQL session storage
-- Supabase credentials required: `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+- **Environment-specific Supabase projects:**
+  - Development: `DEV_SUPABASE_URL` and `DEV_SUPABASE_ANON_KEY` (server), `VITE_DEV_SUPABASE_URL` and `VITE_DEV_SUPABASE_ANON_KEY` (client)
+  - Production: `PROD_SUPABASE_URL` and `PROD_SUPABASE_ANON_KEY` (server), `VITE_PROD_SUPABASE_URL` and `VITE_PROD_SUPABASE_ANON_KEY` (client)
+  - Fallback: `SUPABASE_URL` and `SUPABASE_ANON_KEY` if environment-specific variables not set
 - Authentication works identically in development, Replit browser, and production
 - Users table no longer requires `replit_user_id` - uses Supabase user IDs directly
 - **Security improvements:** CSRF protection with sameSite=strict cookies, session regeneration on login/signup, server-side Zod validation for auth payloads, email verification handling
