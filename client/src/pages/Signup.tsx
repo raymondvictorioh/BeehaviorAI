@@ -55,6 +55,14 @@ export default function Signup() {
         throw new Error(error.message || "Failed to sign up");
       }
 
+      const result = await response.json();
+
+      // Check if email confirmation is required
+      if (result.requiresEmailConfirmation) {
+        navigate(`/confirm-email?email=${encodeURIComponent(data.email)}`);
+        return;
+      }
+
       // Invalidate user query to refresh authentication state
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
 

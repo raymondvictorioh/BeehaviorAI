@@ -109,6 +109,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/auth/resend-confirmation", async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      // Resend confirmation email using Supabase
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      });
+
+      if (error) {
+        console.error("Resend confirmation error:", error);
+        return res.status(400).json({ message: error.message });
+      }
+
+      res.json({ message: "Confirmation email sent successfully" });
+    } catch (error: any) {
+      console.error("Resend confirmation error:", error);
+      res.status(500).json({ message: error.message || "Failed to resend confirmation email" });
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     try {
       // Server-side validation

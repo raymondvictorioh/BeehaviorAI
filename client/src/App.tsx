@@ -25,6 +25,7 @@ import { useAuth } from "@/hooks/useAuth";
 const Landing = lazy(() => import("@/pages/Landing"));
 const Login = lazy(() => import("@/pages/Login"));
 const Signup = lazy(() => import("@/pages/Signup"));
+const ConfirmEmail = lazy(() => import("@/pages/ConfirmEmail"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Students = lazy(() => import("@/pages/Students"));
@@ -182,6 +183,7 @@ function AppContent() {
         <Switch>
           <Route path="/signup" component={Signup} />
           <Route path="/login" component={Login} />
+          <Route path="/confirm-email" component={ConfirmEmail} />
           <Route path="/" component={Landing} />
           <Route component={Landing} />
         </Switch>

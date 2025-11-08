@@ -39,6 +39,11 @@ Preferred communication style: Simple, everyday language.
   - Fallback: `SUPABASE_URL` and `SUPABASE_ANON_KEY` if environment-specific variables not set
 - Authentication works identically in development, Replit browser, and production
 - Users table no longer requires `replit_user_id` - uses Supabase user IDs directly
+- **Email confirmation flow:**
+  - New users are redirected to `/confirm-email` page after signup
+  - Dedicated confirmation page displays user's email and provides resend functionality
+  - Backend endpoint `/api/auth/resend-confirmation` allows users to request new confirmation emails
+  - User profiles persist to database immediately after Supabase signup, regardless of email confirmation status
 - **Security improvements:** CSRF protection with sameSite=strict cookies, session regeneration on login/signup, server-side Zod validation for auth payloads, email verification handling
 
 ## System Architecture
