@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, checkOrganizationAccess, supabase } from "./supabaseAuth";
 import { getChatCompletion, transcribeAudio, generateMeetingSummary } from "./openai";
-import { insertFollowUpSchema } from "@shared/schema";
+import { insertFollowUpSchema, insertStudentResourceSchema } from "@shared/schema";
 import { z } from "zod";
 
 // Helper function to get userId from request session
@@ -711,6 +711,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting follow-up:", error);
       res.status(500).json({ message: "Failed to delete follow-up" });
+    }
+  });
+
+  // Student Resources routes
+  app.get("/api/organizations/:orgId/students/:studentId/resources", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const resources = await storage.getStudentResources(studentId, orgId);
+      res.json(resources);
+    } catch (error) {
+      console.error("Error fetching student resources:", error);
+      res.status(500).json({ message: "Failed to fetch student resources" });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/students/:studentId/resources", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const { title, url } = req.body;
+
+      const resourceData = {
+        title,
+        url,
+        organizationId: orgId,
+        studentId,
+      };
+
+      const validatedData = insertStudentResourceSchema.parse(resourceData);
+      const newResource = await storage.createStudentResource(validatedData);
+      res.json(newResource);
+    } catch (error: any) {
+      console.error("Error creating student resource:", error);
+
+      if (error.code === "23503") {
+        res.status(400).json({ message: "Invalid organization or student ID" });
+      } else if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create student resource", error: error.message });
+      }
+    }
+  });
+
+  app.delete("/api/organizations/:orgId/resources/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      await storage.deleteStudentResource(id, orgId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting student resource:", error);
+      res.status(500).json({ message: "Failed to delete student resource" });
     }
   });
 

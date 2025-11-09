@@ -8,6 +8,7 @@ import {
   meetingNotes,
   followUps,
   classes,
+  studentResources,
   type User,
   type UpsertUser,
   type Organization,
@@ -26,6 +27,8 @@ import {
   type InsertFollowUp,
   type Class,
   type InsertClass,
+  type StudentResource,
+  type InsertStudentResource,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, ne } from "drizzle-orm";
@@ -92,6 +95,11 @@ export interface IStorage {
   createClass(classData: InsertClass): Promise<Class>;
   updateClass(id: string, organizationId: string, classData: Partial<InsertClass>): Promise<Class>;
   deleteClass(id: string, organizationId: string): Promise<void>;
+
+  // Student Resource operations
+  getStudentResources(studentId: string, organizationId: string): Promise<StudentResource[]>;
+  createStudentResource(resource: InsertStudentResource): Promise<StudentResource>;
+  deleteStudentResource(id: string, organizationId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -584,14 +592,46 @@ export class DatabaseStorage implements IStorage {
       .from(students)
       .where(and(eq(students.classId, id), eq(students.organizationId, organizationId)))
       .limit(1);
-    
+
     if (studentsWithClass.length > 0) {
       throw new Error("Cannot delete class with assigned students. Please unassign students first or archive the class instead.");
     }
-    
+
     await db
       .delete(classes)
       .where(and(eq(classes.id, id), eq(classes.organizationId, organizationId)));
+  }
+
+  // Student Resource operations
+  async getStudentResources(studentId: string, organizationId: string): Promise<StudentResource[]> {
+    return await db
+      .select()
+      .from(studentResources)
+      .where(
+        and(
+          eq(studentResources.studentId, studentId),
+          eq(studentResources.organizationId, organizationId)
+        )
+      );
+  }
+
+  async createStudentResource(resource: InsertStudentResource): Promise<StudentResource> {
+    const [newResource] = await db
+      .insert(studentResources)
+      .values(resource)
+      .returning();
+    return newResource;
+  }
+
+  async deleteStudentResource(id: string, organizationId: string): Promise<void> {
+    await db
+      .delete(studentResources)
+      .where(
+        and(
+          eq(studentResources.id, id),
+          eq(studentResources.organizationId, organizationId)
+        )
+      );
   }
 }
 

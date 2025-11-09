@@ -32,19 +32,70 @@ export default function Onboarding() {
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    onMutate: async (newOrgData) => {
+      // Cancel outgoing queries to prevent race conditions
+      await queryClient.cancelQueries({
+        queryKey: ["/api/auth/user"]
+      });
+
+      // Snapshot current user data for rollback
+      const previousUser = queryClient.getQueryData(["/api/auth/user"]);
+
+      // Optimistically update user cache with new organization
+      if (previousUser) {
+        const tempId = `temp-${Date.now()}`;
+        const optimisticOrg = {
+          id: tempId,
+          ...newOrgData,
+          createdAt: new Date(),
+        };
+
+        const updatedUser = {
+          ...previousUser,
+          organizations: [optimisticOrg],
+        };
+
+        queryClient.setQueryData(["/api/auth/user"], updatedUser);
+      }
+
+      // Return context for rollback
+      return { previousUser };
+    },
+    onSuccess: (serverData) => {
+      // Update cache with real server data
+      const currentUser = queryClient.getQueryData(["/api/auth/user"]);
+
+      if (currentUser) {
+        const updatedUser = {
+          ...currentUser,
+          organizations: [serverData],
+        };
+
+        queryClient.setQueryData(["/api/auth/user"], updatedUser);
+      }
+
       toast({
         title: "Organization created!",
         description: "Your school has been set up successfully.",
       });
       setLocation("/");
     },
-    onError: () => {
+    onError: (_error, _variables, context) => {
+      // Rollback to previous state on error
+      if (context?.previousUser) {
+        queryClient.setQueryData(["/api/auth/user"], context.previousUser);
+      }
+
       toast({
         title: "Error",
         description: "Failed to create organization. Please try again.",
         variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      // Refetch to ensure consistency
+      queryClient.invalidateQueries({
+        queryKey: ["/api/auth/user"]
       });
     },
   });

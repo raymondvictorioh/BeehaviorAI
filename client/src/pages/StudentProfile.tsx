@@ -5,20 +5,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BehaviorLogEntry } from "@/components/BehaviorLogEntry";
 import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
-import { AISummaryCard } from "@/components/AISummaryCard";
+import { AIInsightsPanel } from "@/components/AIInsightsPanel";
 import { MeetingNoteCard } from "@/components/MeetingNoteCard";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
 import { AddFollowUpDialog } from "@/components/AddFollowUpDialog";
 import { AddMeetingDialog } from "@/components/AddMeetingDialog";
 import { AddStudentDialog } from "@/components/AddStudentDialog";
+import { AddResourceDialog } from "@/components/AddResourceDialog";
 import { KanbanBoard } from "@/components/KanbanBoard";
-import { ArrowLeft, Plus, Mail, GraduationCap, Edit } from "lucide-react";
+import { ArrowLeft, Plus, Mail, GraduationCap, Edit, Link, ExternalLink, X } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Student, BehaviorLog, MeetingNote, FollowUp, BehaviorLogCategory, Class } from "@shared/schema";
+import type { Student, BehaviorLog, MeetingNote, FollowUp, BehaviorLogCategory, Class, StudentResource } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function StudentProfile() {
@@ -35,6 +36,7 @@ export default function StudentProfile() {
   const [editFollowUp, setEditFollowUp] = useState<FollowUp | null>(null);
   const [isAddMeetingDialogOpen, setIsAddMeetingDialogOpen] = useState(false);
   const [isEditStudentDialogOpen, setIsEditStudentDialogOpen] = useState(false);
+  const [isAddResourceDialogOpen, setIsAddResourceDialogOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch student data
@@ -71,6 +73,12 @@ export default function StudentProfile() {
   const { data: classes = [] } = useQuery<Class[]>({
     queryKey: ["/api/organizations", orgId, "classes"],
     enabled: !!orgId,
+  });
+
+  // Fetch student resources
+  const { data: resources = [] } = useQuery<StudentResource[]>({
+    queryKey: ["/api/organizations", orgId, "students", studentId, "resources"],
+    enabled: !!orgId && !!studentId,
   });
 
   // Create a map of classId to className for quick lookup
@@ -582,6 +590,157 @@ export default function StudentProfile() {
     },
   });
 
+  // Create student resource mutation
+  const createResource = useMutation({
+    mutationFn: async (data: { title: string; url: string }) => {
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/resources`, data);
+      return await res.json();
+    },
+    onMutate: async (newResource) => {
+      // Cancel outgoing queries to prevent race conditions
+      await queryClient.cancelQueries({
+        queryKey: ["/api/organizations", orgId, "students", studentId, "resources"]
+      });
+
+      // Snapshot current resources for rollback
+      const previousResources = queryClient.getQueryData<StudentResource[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "resources",
+      ]);
+
+      // Create optimistic resource with temporary ID
+      const tempId = `temp-${Date.now()}`;
+      const optimisticResource: StudentResource = {
+        id: tempId,
+        organizationId: orgId!,
+        studentId: studentId!,
+        title: newResource.title,
+        url: newResource.url,
+        createdAt: new Date(),
+      };
+
+      // Optimistically update cache
+      if (previousResources) {
+        queryClient.setQueryData<StudentResource[]>(
+          ["/api/organizations", orgId, "students", studentId, "resources"],
+          [...previousResources, optimisticResource]
+        );
+      } else {
+        queryClient.setQueryData<StudentResource[]>(
+          ["/api/organizations", orgId, "students", studentId, "resources"],
+          [optimisticResource]
+        );
+      }
+
+      // Close dialog immediately for instant feedback
+      setIsAddResourceDialogOpen(false);
+
+      // Return context for rollback
+      return { previousResources, tempId };
+    },
+    onSuccess: (serverData: StudentResource, _variables, context) => {
+      // Replace optimistic resource with real server data
+      const currentResources = queryClient.getQueryData<StudentResource[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "resources",
+      ]);
+
+      if (currentResources && context?.tempId) {
+        queryClient.setQueryData<StudentResource[]>(
+          ["/api/organizations", orgId, "students", studentId, "resources"],
+          currentResources.map((resource) =>
+            resource.id === context.tempId ? serverData : resource
+          )
+        );
+      }
+
+      toast({
+        title: "Resource added",
+        description: "The resource has been successfully added.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      // Rollback to previous state on error
+      if (context?.previousResources) {
+        queryClient.setQueryData<StudentResource[]>(
+          ["/api/organizations", orgId, "students", studentId, "resources"],
+          context.previousResources
+        );
+      }
+
+      // Reopen dialog for retry
+      setIsAddResourceDialogOpen(true);
+
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add resource. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      // Refetch to ensure consistency
+      queryClient.invalidateQueries({
+        queryKey: ["/api/organizations", orgId, "students", studentId, "resources"]
+      });
+    },
+  });
+
+  // Delete student resource mutation
+  const deleteResource = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/organizations/${orgId}/resources/${id}`);
+      return id;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "resources"] });
+
+      const previousResources = queryClient.getQueryData<StudentResource[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "resources",
+      ]);
+
+      if (previousResources) {
+        queryClient.setQueryData<StudentResource[]>(
+          ["/api/organizations", orgId, "students", studentId, "resources"],
+          previousResources.filter((resource) => resource.id !== id)
+        );
+      }
+
+      return { previousResources };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Resource deleted",
+        description: "The resource has been successfully deleted.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousResources) {
+        queryClient.setQueryData<StudentResource[]>(
+          ["/api/organizations", orgId, "students", studentId, "resources"],
+          context.previousResources
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete resource. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "resources"] });
+    },
+  });
+
   const handleViewLog = (log: any) => {
     // Find category name from categoryId
     const category = categories.find(cat => cat.id === log.categoryId);
@@ -656,54 +815,107 @@ export default function StudentProfile() {
         Back to Students
       </Button>
 
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-start gap-6 flex-wrap">
-            <Avatar className="h-24 w-24">
-              <AvatarFallback className="text-2xl">{getInitials()}</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-4">
-                <h1 className="text-3xl font-semibold" data-testid="text-student-name">
-                  {student.name}
-                </h1>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditStudentDialogOpen(true)}
-                  data-testid="button-edit-student"
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {student.email && (
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm" data-testid="text-student-email">{student.email}</span>
+      {/* Row 1: Student Profile + AI Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column - Student details */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-start gap-6 flex-wrap">
+                <Avatar className="h-24 w-24">
+                  <AvatarFallback className="text-2xl">{getInitials()}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-4">
+                    <h1 className="text-3xl font-semibold" data-testid="text-student-name">
+                      {student.name}
+                    </h1>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditStudentDialogOpen(true)}
+                      data-testid="button-edit-student"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
                   </div>
-                )}
-                {student.classId && classMap.get(student.classId) && (
-                  <div className="flex items-center gap-2">
-                    <GraduationCap className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm" data-testid="text-student-class">{classMap.get(student.classId)}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    {student.email && (
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid="text-student-email">{student.email}</span>
+                      </div>
+                    )}
+                    {student.classId && classMap.get(student.classId) && (
+                      <div className="flex items-center gap-2">
+                        <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid="text-student-class">{classMap.get(student.classId)}</span>
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  {/* Resources Section */}
+                  <div className="mt-6 pt-6 border-t">
+                    <div className="flex items-center gap-2 mb-4">
+                      <h3 className="text-base font-medium text-muted-foreground">Resources</h3>
+                      <button
+                        onClick={() => setIsAddResourceDialogOpen(true)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        data-testid="button-add-resource"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    {resources.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No resources yet.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-3">
+                        {resources.map((resource) => (
+                          <div
+                            key={resource.id}
+                            className="group relative"
+                            data-testid={`resource-${resource.id}`}
+                          >
+                            <a
+                              href={resource.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-4 py-2 bg-background border rounded-lg hover:bg-accent transition-colors"
+                            >
+                              <Link className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">{resource.title}</span>
+                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                            </a>
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                deleteResource.mutate(resource.id);
+                              }}
+                              className="absolute -top-2 -right-2 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                              data-testid={`button-delete-resource-${resource.id}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
 
-      {behaviorLogs.length > 0 && (
-        <AISummaryCard
-          summary="AI-generated summary will be available soon. This feature uses behavior logs to provide insights about the student's progress and areas for improvement."
-          lastUpdated={format(new Date(), "dd-MM-yyyy 'at' h:mm a")}
-          onRegenerate={() => console.log("Regenerating summary")}
-        />
-      )}
+        {/* Right column - AI Insights Panel */}
+        <div>
+          <AIInsightsPanel studentName={student.name} />
+        </div>
+      </div>
 
+      {/* Row 2: Tabs with Kanban - Full width */}
       <Tabs defaultValue="logs" className="w-full">
         <TabsList className="grid w-full grid-cols-3 max-w-md">
           <TabsTrigger value="logs" data-testid="tab-logs">Behavior Logs</TabsTrigger>
@@ -910,6 +1122,13 @@ export default function StudentProfile() {
           }}
         />
       )}
+
+      <AddResourceDialog
+        open={isAddResourceDialogOpen}
+        onOpenChange={setIsAddResourceDialogOpen}
+        onSubmit={async (data) => createResource.mutate(data)}
+        isPending={createResource.isPending}
+      />
     </div>
   );
 }

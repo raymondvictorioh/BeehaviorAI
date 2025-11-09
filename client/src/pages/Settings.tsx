@@ -112,19 +112,72 @@ export default function Settings() {
       const res = await apiRequest("PATCH", `/api/organizations/${orgId}`, data);
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    onMutate: async (updatedData) => {
+      // Cancel outgoing queries to prevent race conditions
+      await queryClient.cancelQueries({
+        queryKey: ["/api/auth/user"]
+      });
+
+      // Snapshot current user data for rollback
+      const previousUser = queryClient.getQueryData(["/api/auth/user"]);
+
+      // Optimistically update user cache with new organization data
+      if (previousUser && user?.organizations?.[0]) {
+        const updatedUser = {
+          ...previousUser,
+          organizations: [
+            {
+              ...user.organizations[0],
+              ...updatedData,
+            },
+            ...user.organizations.slice(1),
+          ],
+        };
+
+        queryClient.setQueryData(["/api/auth/user"], updatedUser);
+      }
+
+      // Return context for rollback
+      return { previousUser };
+    },
+    onSuccess: (serverData) => {
+      // Update cache with real server data
+      const currentUser = queryClient.getQueryData(["/api/auth/user"]);
+
+      if (currentUser && user?.organizations?.[0]) {
+        const updatedUser = {
+          ...currentUser,
+          organizations: [
+            serverData,
+            ...user.organizations.slice(1),
+          ],
+        };
+
+        queryClient.setQueryData(["/api/auth/user"], updatedUser);
+      }
+
       toast({
         title: "Organization updated",
         description: "Your organization details have been successfully updated.",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      // Rollback to previous state on error
+      if (context?.previousUser) {
+        queryClient.setQueryData(["/api/auth/user"], context.previousUser);
+      }
+
       console.error("Organization update error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to update organization. Please try again.",
         variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      // Refetch to ensure consistency
+      queryClient.invalidateQueries({
+        queryKey: ["/api/auth/user"]
       });
     },
   });

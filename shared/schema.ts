@@ -206,3 +206,21 @@ export const insertFollowUpSchema = createInsertSchema(followUps).omit({
 
 export type InsertFollowUp = z.infer<typeof insertFollowUpSchema>;
 export type FollowUp = typeof followUps.$inferSelect;
+
+// Student Resources table
+export const studentResources = pgTable("student_resources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  studentId: varchar("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 255 }).notNull(),
+  url: text("url").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertStudentResourceSchema = createInsertSchema(studentResources).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertStudentResource = z.infer<typeof insertStudentResourceSchema>;
+export type StudentResource = typeof studentResources.$inferSelect;
