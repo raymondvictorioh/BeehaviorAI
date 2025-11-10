@@ -1,4 +1,4 @@
-import { GraduationCap, Home, Users, FileText, Settings, Moon, Sun } from "lucide-react";
+import { GraduationCap, Home, Users, FileText, Settings, Moon, Sun, ClipboardList } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -29,6 +29,11 @@ const menuItems = [
     icon: Users,
   },
   {
+    title: "Behavior Logs",
+    url: "/behavior-logs",
+    icon: ClipboardList,
+  },
+  {
     title: "Reports",
     url: "/reports",
     icon: FileText,
@@ -52,7 +57,7 @@ export function AppSidebar() {
   // Prefetch data on hover
   const handleMouseEnter = (url: string) => {
     if (!orgId) return;
-    
+
     if (url === "/") {
       // Prefetch dashboard stats
       queryClient.prefetchQuery({
@@ -62,6 +67,17 @@ export function AppSidebar() {
       // Prefetch students list
       queryClient.prefetchQuery({
         queryKey: ["/api/organizations", orgId, "students"],
+      });
+    } else if (url === "/behavior-logs") {
+      // Prefetch behavior logs and related data
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "behavior-logs"],
+      });
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
+      });
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "classes"],
       });
     } else if (url === "/settings") {
       // Prefetch categories for settings

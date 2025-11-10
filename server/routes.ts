@@ -433,6 +433,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Behavior log routes
+  // Get all behavior logs for an organization (organization-wide view)
+  app.get("/api/organizations/:orgId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const logs = await storage.getAllBehaviorLogs(orgId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching organization behavior logs:", error);
+      res.status(500).json({ message: "Failed to fetch behavior logs" });
+    }
+  });
+
   app.get("/api/organizations/:orgId/students/:studentId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, studentId } = req.params;

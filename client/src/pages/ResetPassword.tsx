@@ -8,52 +8,57 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { supabase } from "@/lib/supabase";
 import { School } from "lucide-react";
 
-const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
+const resetPasswordSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string().min(6, "Password must be at least 6 characters"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
 
-type LoginForm = z.infer<typeof loginSchema>;
+type ResetPasswordForm = z.infer<typeof resetPasswordSchema>;
 
-export default function Login() {
+export default function ResetPassword() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
-  const form = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
+  const form = useForm<ResetPasswordForm>({
+    resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
-      email: "",
       password: "",
+      confirmPassword: "",
     },
   });
 
-  const onSubmit = async (data: LoginForm) => {
+  const onSubmit = async (data: ResetPasswordForm) => {
     try {
       setIsLoading(true);
-      const response = await apiRequest("POST", "/api/auth/login", data);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to login");
-      }
-
-      // Invalidate user query to refresh authentication state
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
+      const { error } = await supabase.auth.updateUser({
+        password: data.password,
       });
 
-      navigate("/");
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Password updated",
+        description: "Your password has been successfully reset.",
+      });
+
+      // Redirect to login page
+      setTimeout(() => {
+        navigate("/login");
+      }, 1500);
     } catch (error: any) {
       toast({
-        title: "Login failed",
-        description: error.message || "Please check your credentials and try again.",
+        title: "Failed to reset password",
+        description: error.message || "Please try again or request a new reset link.",
         variant: "destructive",
       });
     } finally {
@@ -68,25 +73,27 @@ export default function Login() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
             <School className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>Sign in to your Beehave account</CardDescription>
+          <CardTitle className="text-2xl">Reset your password</CardTitle>
+          <CardDescription>
+            Enter your new password below
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="email"
+                name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>New password</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
-                        type="email"
-                        placeholder="your@email.com"
-                        autoComplete="email"
-                        data-testid="input-email"
+                        type="password"
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                        data-testid="input-password"
                       />
                     </FormControl>
                     <FormMessage />
@@ -95,27 +102,17 @@ export default function Login() {
               />
               <FormField
                 control={form.control}
-                name="password"
+                name="confirmPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between">
-                      <FormLabel>Password</FormLabel>
-                      <button
-                        type="button"
-                        className="text-xs text-primary underline-offset-4 hover:underline"
-                        onClick={() => navigate("/forgot-password")}
-                        data-testid="link-forgot-password"
-                      >
-                        Forgot password?
-                      </button>
-                    </div>
+                    <FormLabel>Confirm new password</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         type="password"
                         placeholder="••••••••"
-                        autoComplete="current-password"
-                        data-testid="input-password"
+                        autoComplete="new-password"
+                        data-testid="input-confirm-password"
                       />
                     </FormControl>
                     <FormMessage />
@@ -126,25 +123,12 @@ export default function Login() {
                 type="submit"
                 className="w-full"
                 disabled={isLoading}
-                data-testid="button-login"
+                data-testid="button-reset-password"
               >
-                {isLoading ? "Signing in..." : "Sign in"}
+                {isLoading ? "Resetting password..." : "Reset password"}
               </Button>
             </form>
           </Form>
-          <div className="mt-4 text-center text-sm">
-            <p className="text-muted-foreground">
-              Don't have an account?{" "}
-              <button
-                type="button"
-                className="text-primary underline-offset-4 hover:underline"
-                onClick={() => navigate("/signup")}
-                data-testid="link-signup"
-              >
-                Sign up
-              </button>
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>

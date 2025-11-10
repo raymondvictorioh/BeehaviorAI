@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(pkill:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(PORT=5001 npm run dev:*)",
+      "Bash(node:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm rebuild:*)",
+      "Bash(sudo chown:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
