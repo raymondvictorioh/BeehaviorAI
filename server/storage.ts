@@ -993,11 +993,50 @@ export class DatabaseStorage implements IStorage {
       );
   }
 
-  async getAllAcademicLogs(organizationId: string): Promise<AcademicLog[]> {
-    return await db
-      .select()
+  async getAllAcademicLogs(organizationId: string): Promise<any[]> {
+    const logs = await db
+      .select({
+        id: academicLogs.id,
+        organizationId: academicLogs.organizationId,
+        studentId: academicLogs.studentId,
+        subjectId: academicLogs.subjectId,
+        categoryId: academicLogs.categoryId,
+        assessmentDate: academicLogs.assessmentDate,
+        grade: academicLogs.grade,
+        score: academicLogs.score,
+        notes: academicLogs.notes,
+        loggedBy: academicLogs.loggedBy,
+        loggedAt: academicLogs.loggedAt,
+        student: {
+          id: students.id,
+          name: students.name,
+          email: students.email,
+          classId: students.classId,
+        },
+        subject: {
+          id: subjects.id,
+          name: subjects.name,
+          code: subjects.code,
+        },
+        category: {
+          id: academicLogCategories.id,
+          name: academicLogCategories.name,
+          color: academicLogCategories.color,
+        },
+        class: {
+          id: classes.id,
+          name: classes.name,
+        },
+      })
       .from(academicLogs)
-      .where(eq(academicLogs.organizationId, organizationId));
+      .leftJoin(students, eq(academicLogs.studentId, students.id))
+      .leftJoin(subjects, eq(academicLogs.subjectId, subjects.id))
+      .leftJoin(academicLogCategories, eq(academicLogs.categoryId, academicLogCategories.id))
+      .leftJoin(classes, eq(students.classId, classes.id))
+      .where(eq(academicLogs.organizationId, organizationId))
+      .orderBy(academicLogs.assessmentDate);
+
+    return logs;
   }
 
   async getAcademicLog(id: string, organizationId: string): Promise<AcademicLog | undefined> {

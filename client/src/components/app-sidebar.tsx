@@ -1,4 +1,4 @@
-import { GraduationCap, Home, Users, FileText, Settings, Moon, Sun, ClipboardList } from "lucide-react";
+import { GraduationCap, Home, Users, FileText, Settings, Moon, Sun, ClipboardList, BookOpen } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -32,6 +32,11 @@ const menuItems = [
     title: "Behavior Logs",
     url: "/behavior-logs",
     icon: ClipboardList,
+  },
+  {
+    title: "Academic Logs",
+    url: "/academic-logs",
+    icon: BookOpen,
   },
   {
     title: "Reports",

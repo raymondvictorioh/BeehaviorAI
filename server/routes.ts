@@ -941,6 +941,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Academic Logs routes
+  // Get all academic logs for an organization (organization-wide view)
+  app.get("/api/organizations/:orgId/academic-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const logs = await storage.getAllAcademicLogs(orgId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching organization academic logs:", error);
+      res.status(500).json({ message: "Failed to fetch academic logs" });
+    }
+  });
+
+  // Create academic log at organization level (for organization-wide academic logs page)
+  app.post("/api/organizations/:orgId/academic-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const user = req.user;
+
+      const logData = {
+        ...req.body,
+        organizationId: orgId,
+        assessmentDate: req.body.assessmentDate ? new Date(req.body.assessmentDate) : new Date(),
+        loggedBy: user?.email || "Unknown",
+      };
+
+      const validatedData = insertAcademicLogSchema.parse(logData);
+      const newLog = await storage.createAcademicLog(validatedData);
+      res.json(newLog);
+    } catch (error: any) {
+      console.error("Error creating academic log:", error);
+
+      if (error.code === "23503") {
+        res.status(400).json({ message: "Invalid organization, student, subject, or category ID" });
+      } else if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create academic log", error: error.message });
+      }
+    }
+  });
+
   app.get("/api/organizations/:orgId/students/:studentId/academic-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, studentId } = req.params;
@@ -1297,3 +1338,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   return httpServer;
 }
+// trigger reload

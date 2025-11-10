@@ -33,6 +33,7 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Students = lazy(() => import("@/pages/Students"));
 const StudentProfile = lazy(() => import("@/pages/StudentProfile"));
 const BehaviorLogs = lazy(() => import("@/pages/BehaviorLogs"));
+const AcademicLogs = lazy(() => import("@/pages/AcademicLogs"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -60,6 +61,7 @@ function AppRouter() {
         <Route path="/students" component={Students} />
         <Route path="/students/:id" component={StudentProfile} />
         <Route path="/behavior-logs" component={BehaviorLogs} />
+        <Route path="/academic-logs" component={AcademicLogs} />
         <Route path="/reports" component={Reports} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
