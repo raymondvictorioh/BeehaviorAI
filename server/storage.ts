@@ -40,7 +40,7 @@ import {
   type InsertAcademicLog,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 
 export interface DashboardStats {
   totalStudents: number;
@@ -270,8 +270,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Student operations
-  async getStudents(organizationId: string): Promise<Student[]> {
-    return db.select().from(students).where(eq(students.organizationId, organizationId));
+  async getStudents(organizationId: string): Promise<(Student & { behaviorLogsCount: number; academicLogsCount: number })[]> {
+    const result = await db
+      .select({
+        id: students.id,
+        organizationId: students.organizationId,
+        name: students.name,
+        email: students.email,
+        classId: students.classId,
+        gender: students.gender,
+        createdAt: students.createdAt,
+        updatedAt: students.updatedAt,
+        behaviorLogsCount: sql<number>`(
+          SELECT COUNT(*)::int
+          FROM behavior_logs
+          WHERE behavior_logs.student_id = students.id
+        )`,
+        academicLogsCount: sql<number>`(
+          SELECT COUNT(*)::int
+          FROM academic_logs
+          WHERE academic_logs.student_id = students.id
+        )`,
+      })
+      .from(students)
+      .where(eq(students.organizationId, organizationId));
+
+    return result;
   }
 
   async getStudent(id: string, organizationId: string): Promise<Student | undefined> {

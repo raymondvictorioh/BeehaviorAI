@@ -9,7 +9,8 @@ export default function StudentCardExample() {
         email="sarah.johnson@school.edu"
         class="Grade 10A"
         gender="female"
-        logsCount={5}
+        behaviorLogsCount={3}
+        academicLogsCount={2}
         lastActivity="2 days ago"
         onClick={() => console.log('Student card clicked')}
       />

@@ -9,7 +9,8 @@ interface StudentCardProps {
   email: string;
   class: string;
   gender: string;
-  logsCount: number;
+  behaviorLogsCount: number;
+  academicLogsCount: number;
   lastActivity?: string;
   avatarUrl?: string;
   onClick?: () => void;
@@ -20,7 +21,8 @@ export function StudentCard({
   name,
   email,
   class: className,
-  logsCount,
+  behaviorLogsCount,
+  academicLogsCount,
   lastActivity,
   avatarUrl,
   onClick,
@@ -51,12 +53,15 @@ export function StudentCard({
               {name}
             </h3>
             <p className="text-sm text-muted-foreground truncate">{email}</p>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <Badge variant="secondary" className="text-xs" data-testid={`badge-class-${id}`}>
                 {className || "N.A"}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                {logsCount} {logsCount === 1 ? "log" : "logs"}
+                {behaviorLogsCount} {behaviorLogsCount === 1 ? "behavior log" : "behavior logs"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {academicLogsCount} {academicLogsCount === 1 ? "academic log" : "academic logs"}
               </span>
             </div>
             {lastActivity && (
