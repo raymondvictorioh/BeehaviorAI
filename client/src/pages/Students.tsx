@@ -39,7 +39,7 @@ export default function Students() {
 
   const orgId = user?.organizations?.[0]?.id;
 
-  const { data: students = [], isLoading } = useQuery<Student[]>({
+  const { data: students = [], isLoading } = useQuery<(Student & { behaviorLogsCount: number; academicLogsCount: number })[]>({
     queryKey: ["/api/organizations", orgId, "students"],
     enabled: !!orgId,
   });
@@ -118,7 +118,8 @@ export default function Students() {
                 email={student.email ?? ""}
                 class={className}
                 gender={student.gender ?? ""}
-                logsCount={0}
+                behaviorLogsCount={student.behaviorLogsCount ?? 0}
+                academicLogsCount={student.academicLogsCount ?? 0}
                 lastActivity=""
                 onClick={() => setLocation(`/students/${student.id}`)}
               />
