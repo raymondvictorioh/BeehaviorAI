@@ -395,17 +395,33 @@ export default function AcademicLogs() {
 
   // Academic log handlers
   const handleViewLog = (log: AcademicLog) => {
+    // Find subject name and category details from IDs
+    const subject = subjects.find(s => s.id === log.subjectId);
+    const category = categories.find(c => c.id === log.categoryId);
+
+    // Add subject and category details to log object for the details sheet
     const logWithDetails = {
       ...log,
       assessmentDate: format(new Date(log.assessmentDate), "yyyy-MM-dd"),
       loggedAt: log.loggedAt ? format(new Date(log.loggedAt), "yyyy-MM-dd HH:mm:ss") : "",
+      subject: subject?.name || "Unknown",
+      category: category?.name || "Unknown",
+      categoryColor: category?.color || null,
     };
     setSelectedLog(logWithDetails);
     setIsLogDetailsOpen(true);
   };
 
-  const handleUpdateLog = (id: string, updates: Partial<AcademicLog>) => {
-    updateAcademicLog.mutate({ id, updates });
+  const handleUpdateGrade = (id: string, grade: string) => {
+    updateAcademicLog.mutate({ id, updates: { grade } });
+  };
+
+  const handleUpdateScore = (id: string, score: string) => {
+    updateAcademicLog.mutate({ id, updates: { score } });
+  };
+
+  const handleUpdateNotes = (id: string, notes: string) => {
+    updateAcademicLog.mutate({ id, updates: { notes } });
   };
 
   const handleDeleteLog = (id: string) => {
@@ -640,7 +656,9 @@ export default function AcademicLogs() {
         open={isLogDetailsOpen}
         onOpenChange={setIsLogDetailsOpen}
         log={selectedLog}
-        onUpdate={handleUpdateLog}
+        onUpdateGrade={handleUpdateGrade}
+        onUpdateScore={handleUpdateScore}
+        onUpdateNotes={handleUpdateNotes}
         onDelete={handleDeleteLog}
       />
 
