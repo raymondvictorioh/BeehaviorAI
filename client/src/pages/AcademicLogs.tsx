@@ -590,7 +590,7 @@ export default function AcademicLogs() {
                   {filteredLogs.map((log) => (
                     <TableRow
                       key={log.id}
-                      className="cursor-pointer hover:bg-accent"
+                      className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleViewLog(log)}
                     >
                       <TableCell className="whitespace-nowrap">

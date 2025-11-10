@@ -8,7 +8,8 @@
       "Bash(npm run build:*)",
       "Bash(npm rebuild:*)",
       "Bash(sudo chown:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []
