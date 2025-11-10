@@ -26,10 +26,13 @@ const Landing = lazy(() => import("@/pages/Landing"));
 const Login = lazy(() => import("@/pages/Login"));
 const Signup = lazy(() => import("@/pages/Signup"));
 const ConfirmEmail = lazy(() => import("@/pages/ConfirmEmail"));
+const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Students = lazy(() => import("@/pages/Students"));
 const StudentProfile = lazy(() => import("@/pages/StudentProfile"));
+const BehaviorLogs = lazy(() => import("@/pages/BehaviorLogs"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -56,6 +59,7 @@ function AppRouter() {
         <Route path="/" component={Dashboard} />
         <Route path="/students" component={Students} />
         <Route path="/students/:id" component={StudentProfile} />
+        <Route path="/behavior-logs" component={BehaviorLogs} />
         <Route path="/reports" component={Reports} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
@@ -184,6 +188,8 @@ function AppContent() {
           <Route path="/signup" component={Signup} />
           <Route path="/login" component={Login} />
           <Route path="/confirm-email" component={ConfirmEmail} />
+          <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/reset-password" component={ResetPassword} />
           <Route path="/" component={Landing} />
           <Route component={Landing} />
         </Switch>

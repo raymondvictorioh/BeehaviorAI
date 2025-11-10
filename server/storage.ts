@@ -366,15 +366,80 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Behavior Log operations
-  async getBehaviorLogs(studentId: string, organizationId: string): Promise<BehaviorLog[]> {
-    return db
-      .select()
+  async getBehaviorLogs(studentId: string, organizationId: string): Promise<any[]> {
+    const logs = await db
+      .select({
+        id: behaviorLogs.id,
+        organizationId: behaviorLogs.organizationId,
+        studentId: behaviorLogs.studentId,
+        categoryId: behaviorLogs.categoryId,
+        incidentDate: behaviorLogs.incidentDate,
+        notes: behaviorLogs.notes,
+        strategies: behaviorLogs.strategies,
+        loggedBy: behaviorLogs.loggedBy,
+        loggedAt: behaviorLogs.loggedAt,
+        student: {
+          id: students.id,
+          name: students.name,
+          email: students.email,
+          classId: students.classId,
+        },
+        category: {
+          id: behaviorLogCategories.id,
+          name: behaviorLogCategories.name,
+          color: behaviorLogCategories.color,
+        },
+        class: {
+          id: classes.id,
+          name: classes.name,
+        },
+      })
       .from(behaviorLogs)
-      .where(and(eq(behaviorLogs.studentId, studentId), eq(behaviorLogs.organizationId, organizationId)));
+      .leftJoin(students, eq(behaviorLogs.studentId, students.id))
+      .leftJoin(behaviorLogCategories, eq(behaviorLogs.categoryId, behaviorLogCategories.id))
+      .leftJoin(classes, eq(students.classId, classes.id))
+      .where(and(eq(behaviorLogs.studentId, studentId), eq(behaviorLogs.organizationId, organizationId)))
+      .orderBy(behaviorLogs.incidentDate);
+
+    return logs;
   }
 
-  async getAllBehaviorLogs(organizationId: string): Promise<BehaviorLog[]> {
-    return db.select().from(behaviorLogs).where(eq(behaviorLogs.organizationId, organizationId));
+  async getAllBehaviorLogs(organizationId: string): Promise<any[]> {
+    const logs = await db
+      .select({
+        id: behaviorLogs.id,
+        organizationId: behaviorLogs.organizationId,
+        studentId: behaviorLogs.studentId,
+        categoryId: behaviorLogs.categoryId,
+        incidentDate: behaviorLogs.incidentDate,
+        notes: behaviorLogs.notes,
+        strategies: behaviorLogs.strategies,
+        loggedBy: behaviorLogs.loggedBy,
+        loggedAt: behaviorLogs.loggedAt,
+        student: {
+          id: students.id,
+          name: students.name,
+          email: students.email,
+          classId: students.classId,
+        },
+        category: {
+          id: behaviorLogCategories.id,
+          name: behaviorLogCategories.name,
+          color: behaviorLogCategories.color,
+        },
+        class: {
+          id: classes.id,
+          name: classes.name,
+        },
+      })
+      .from(behaviorLogs)
+      .leftJoin(students, eq(behaviorLogs.studentId, students.id))
+      .leftJoin(behaviorLogCategories, eq(behaviorLogs.categoryId, behaviorLogCategories.id))
+      .leftJoin(classes, eq(students.classId, classes.id))
+      .where(eq(behaviorLogs.organizationId, organizationId))
+      .orderBy(behaviorLogs.incidentDate);
+
+    return logs;
   }
 
   async getBehaviorLog(id: string, organizationId: string): Promise<BehaviorLog | undefined> {

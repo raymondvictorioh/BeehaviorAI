@@ -22,8 +22,10 @@ import {
 interface AddBehaviorLogDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit?: (data: { date: string; category: string; notes: string }) => void;
+  onSubmit?: (data: { date: string; category: string; notes: string; studentId?: string }) => void;
   categories?: Array<{ id: string; name: string; color?: string | null }>;
+  students?: Array<{ id: string; name: string }>;
+  preselectedStudentId?: string;
 }
 
 const getTodayDate = () => {
@@ -36,19 +38,22 @@ export function AddBehaviorLogDialog({
   onOpenChange,
   onSubmit,
   categories = [],
+  students = [],
+  preselectedStudentId,
 }: AddBehaviorLogDialogProps) {
   const [date, setDate] = useState(getTodayDate());
   const [category, setCategory] = useState("");
   const [notes, setNotes] = useState("");
+  const [studentId, setStudentId] = useState(preselectedStudentId || "");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Submitting behavior log:", { date, category, notes });
-    onSubmit?.({ date, category, notes });
+    console.log("Submitting behavior log:", { date, category, notes, studentId });
+    onSubmit?.({ date, category, notes, studentId });
     setDate(getTodayDate());
     setCategory("");
     setNotes("");
-    onOpenChange(false);
+    setStudentId(preselectedStudentId || "");
   };
 
   return (
@@ -57,7 +62,7 @@ export function AddBehaviorLogDialog({
         <DialogHeader>
           <DialogTitle>Add Behavior Log</DialogTitle>
           <DialogDescription>
-            Record a new behavior incident or observation for this student.
+            Record a new behavior incident or observation{preselectedStudentId ? " for this student" : ""}.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -73,6 +78,23 @@ export function AddBehaviorLogDialog({
                 data-testid="input-log-date"
               />
             </div>
+            {!preselectedStudentId && students.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="student">Student</Label>
+                <Select value={studentId} onValueChange={setStudentId} required>
+                  <SelectTrigger id="student" data-testid="select-student">
+                    <SelectValue placeholder="Select a student" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {students.map((student) => (
+                      <SelectItem key={student.id} value={student.id}>
+                        {student.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
               <Select value={category} onValueChange={setCategory} required>
