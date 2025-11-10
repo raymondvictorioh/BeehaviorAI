@@ -10,10 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Users, Bell, FileText, Plus, Trash2, Edit, GraduationCap } from "lucide-react";
+import { Building2, Users, Bell, FileText, Plus, Trash2, Edit, GraduationCap, BookOpen, Award } from "lucide-react";
 import { CategoryDialog } from "@/components/CategoryDialog";
 import { ClassDialog } from "@/components/ClassDialog";
-import type { BehaviorLogCategory, User, Class } from "@shared/schema";
+import { SubjectDialog } from "@/components/SubjectDialog";
+import { AcademicCategoryDialog } from "@/components/AcademicCategoryDialog";
+import type { BehaviorLogCategory, User, Class, Subject, AcademicLogCategory } from "@shared/schema";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   AlertDialog,
@@ -61,6 +63,12 @@ export default function Settings() {
   const [isClassDialogOpen, setIsClassDialogOpen] = useState(false);
   const [editClass, setEditClass] = useState<Class | null>(null);
   const [deleteClassId, setDeleteClassId] = useState<string | null>(null);
+  const [isSubjectDialogOpen, setIsSubjectDialogOpen] = useState(false);
+  const [editSubject, setEditSubject] = useState<Subject | null>(null);
+  const [deleteSubjectId, setDeleteSubjectId] = useState<string | null>(null);
+  const [isAcademicCategoryDialogOpen, setIsAcademicCategoryDialogOpen] = useState(false);
+  const [editAcademicCategory, setEditAcademicCategory] = useState<AcademicLogCategory | null>(null);
+  const [deleteAcademicCategoryId, setDeleteAcademicCategoryId] = useState<string | null>(null);
 
   // Fetch organization users
   const { data: organizationUsers = [], isLoading: isLoadingUsers } = useQuery<OrganizationUser[]>({
@@ -95,6 +103,18 @@ export default function Settings() {
       });
     }
   }, [organization]);
+
+  // Fetch subjects
+  const { data: subjects = [], isLoading: isLoadingSubjects } = useQuery<Subject[]>({
+    queryKey: ["/api/organizations", orgId, "subjects"],
+    enabled: !!orgId,
+  });
+
+  // Fetch academic categories
+  const { data: academicCategories = [], isLoading: isLoadingAcademicCategories } = useQuery<AcademicLogCategory[]>({
+    queryKey: ["/api/organizations", orgId, "academic-log-categories"],
+    enabled: !!orgId,
+  });
 
   // Fetch categories
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery<BehaviorLogCategory[]>({
@@ -522,6 +542,318 @@ export default function Settings() {
     }
   };
 
+  // Subject mutations with optimistic updates
+  const createSubject = useMutation({
+    mutationFn: async (data: { name: string; code: string | null; description: string | null; isArchived: boolean; isDefault?: boolean }) => {
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/subjects`, { ...data, isDefault: false });
+      return await res.json();
+    },
+    onMutate: async (newSubject) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "subjects"] });
+      const previousSubjects = queryClient.getQueryData<Subject[]>(["/api/organizations", orgId, "subjects"]);
+      const tempId = `temp-${Date.now()}`;
+      const optimisticSubject: Subject = {
+        id: tempId,
+        organizationId: orgId!,
+        name: newSubject.name,
+        code: newSubject.code,
+        description: newSubject.description,
+        isDefault: false,
+        isArchived: newSubject.isArchived,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      if (previousSubjects) {
+        queryClient.setQueryData<Subject[]>(
+          ["/api/organizations", orgId, "subjects"],
+          [...previousSubjects, optimisticSubject]
+        );
+      }
+      setIsSubjectDialogOpen(false);
+      return { previousSubjects, tempId };
+    },
+    onSuccess: (data: Subject, _variables, context) => {
+      const previousSubjects = queryClient.getQueryData<Subject[]>(["/api/organizations", orgId, "subjects"]);
+      if (previousSubjects && context?.tempId) {
+        queryClient.setQueryData<Subject[]>(
+          ["/api/organizations", orgId, "subjects"],
+          previousSubjects.map((s) => (s.id === context.tempId ? data : s))
+        );
+      }
+      toast({
+        title: "Subject created",
+        description: "The subject has been successfully created.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousSubjects) {
+        queryClient.setQueryData<Subject[]>(["/api/organizations", orgId, "subjects"], context.previousSubjects);
+      }
+      setIsSubjectDialogOpen(true);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create subject. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "subjects"] });
+    },
+  });
+
+  const updateSubject = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Subject> }) => {
+      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/subjects/${id}`, updates);
+      return await res.json();
+    },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "subjects"] });
+      const previousSubjects = queryClient.getQueryData<Subject[]>(["/api/organizations", orgId, "subjects"]);
+      if (previousSubjects) {
+        queryClient.setQueryData<Subject[]>(
+          ["/api/organizations", orgId, "subjects"],
+          previousSubjects.map((s) => (s.id === id ? { ...s, ...updates } : s))
+        );
+      }
+      setIsSubjectDialogOpen(false);
+      return { previousSubjects };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Subject updated",
+        description: "The subject has been successfully updated.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousSubjects) {
+        queryClient.setQueryData<Subject[]>(["/api/organizations", orgId, "subjects"], context.previousSubjects);
+      }
+      setIsSubjectDialogOpen(true);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update subject. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "subjects"] });
+    },
+  });
+
+  const deleteSubject = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/organizations/${orgId}/subjects/${id}`);
+      return id;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "subjects"] });
+      const previousSubjects = queryClient.getQueryData<Subject[]>(["/api/organizations", orgId, "subjects"]);
+      if (previousSubjects) {
+        queryClient.setQueryData<Subject[]>(
+          ["/api/organizations", orgId, "subjects"],
+          previousSubjects.filter((s) => s.id !== id)
+        );
+      }
+      setDeleteSubjectId(null);
+      return { previousSubjects };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Subject deleted",
+        description: "The subject has been successfully deleted.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousSubjects) {
+        queryClient.setQueryData<Subject[]>(["/api/organizations", orgId, "subjects"], context.previousSubjects);
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete subject. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "subjects"] });
+    },
+  });
+
+  const handleSubjectSubmit = async (data: { name: string; code: string | null; description: string | null; isArchived: boolean }) => {
+    if (editSubject) {
+      updateSubject.mutate({ id: editSubject.id, updates: data });
+    } else {
+      createSubject.mutate(data);
+    }
+  };
+
+  // Academic category mutations with optimistic updates
+  const createAcademicCategory = useMutation({
+    mutationFn: async (data: { name: string; description: string | null; color: string | null; displayOrder: number }) => {
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/academic-log-categories`, data);
+      return await res.json();
+    },
+    onMutate: async (newCategory) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "academic-log-categories"] });
+      const previousCategories = queryClient.getQueryData<AcademicLogCategory[]>([
+        "/api/organizations",
+        orgId,
+        "academic-log-categories",
+      ]);
+      const tempId = `temp-${Date.now()}`;
+      const optimisticCategory: AcademicLogCategory = {
+        id: tempId,
+        organizationId: orgId!,
+        name: newCategory.name,
+        description: newCategory.description,
+        color: newCategory.color,
+        displayOrder: newCategory.displayOrder,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      if (previousCategories) {
+        queryClient.setQueryData<AcademicLogCategory[]>(
+          ["/api/organizations", orgId, "academic-log-categories"],
+          [...previousCategories, optimisticCategory]
+        );
+      }
+      setIsAcademicCategoryDialogOpen(false);
+      return { previousCategories, tempId };
+    },
+    onSuccess: (data: AcademicLogCategory, _variables, context) => {
+      const previousCategories = queryClient.getQueryData<AcademicLogCategory[]>([
+        "/api/organizations",
+        orgId,
+        "academic-log-categories",
+      ]);
+      if (previousCategories && context?.tempId) {
+        queryClient.setQueryData<AcademicLogCategory[]>(
+          ["/api/organizations", orgId, "academic-log-categories"],
+          previousCategories.map((cat) => (cat.id === context.tempId ? data : cat))
+        );
+      }
+      toast({
+        title: "Academic category created",
+        description: "The academic category has been successfully created.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousCategories) {
+        queryClient.setQueryData<AcademicLogCategory[]>(
+          ["/api/organizations", orgId, "academic-log-categories"],
+          context.previousCategories
+        );
+      }
+      setIsAcademicCategoryDialogOpen(true);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create academic category. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-log-categories"] });
+    },
+  });
+
+  const updateAcademicCategory = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<AcademicLogCategory> }) => {
+      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/academic-log-categories/${id}`, updates);
+      return await res.json();
+    },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "academic-log-categories"] });
+      const previousCategories = queryClient.getQueryData<AcademicLogCategory[]>([
+        "/api/organizations",
+        orgId,
+        "academic-log-categories",
+      ]);
+      if (previousCategories) {
+        queryClient.setQueryData<AcademicLogCategory[]>(
+          ["/api/organizations", orgId, "academic-log-categories"],
+          previousCategories.map((cat) => (cat.id === id ? { ...cat, ...updates } : cat))
+        );
+      }
+      setIsAcademicCategoryDialogOpen(false);
+      return { previousCategories };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Academic category updated",
+        description: "The academic category has been successfully updated.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousCategories) {
+        queryClient.setQueryData<AcademicLogCategory[]>(
+          ["/api/organizations", orgId, "academic-log-categories"],
+          context.previousCategories
+        );
+      }
+      setIsAcademicCategoryDialogOpen(true);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update academic category. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-log-categories"] });
+    },
+  });
+
+  const deleteAcademicCategory = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/organizations/${orgId}/academic-log-categories/${id}`);
+      return id;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "academic-log-categories"] });
+      const previousCategories = queryClient.getQueryData<AcademicLogCategory[]>([
+        "/api/organizations",
+        orgId,
+        "academic-log-categories",
+      ]);
+      if (previousCategories) {
+        queryClient.setQueryData<AcademicLogCategory[]>(
+          ["/api/organizations", orgId, "academic-log-categories"],
+          previousCategories.filter((cat) => cat.id !== id)
+        );
+      }
+      setDeleteAcademicCategoryId(null);
+      return { previousCategories };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Academic category deleted",
+        description: "The academic category has been successfully deleted.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousCategories) {
+        queryClient.setQueryData<AcademicLogCategory[]>(
+          ["/api/organizations", orgId, "academic-log-categories"],
+          context.previousCategories
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete academic category. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-log-categories"] });
+    },
+  });
+
+  const handleAcademicCategorySubmit = async (data: { name: string; description: string | null; color: string | null; displayOrder: number }) => {
+    if (editAcademicCategory) {
+      updateAcademicCategory.mutate({ id: editAcademicCategory.id, updates: data });
+    } else {
+      createAcademicCategory.mutate(data);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -534,7 +866,7 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="organization" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 max-w-2xl">
+        <TabsList className="grid w-full grid-cols-7 max-w-4xl">
           <TabsTrigger value="organization" data-testid="tab-organization">
             <Building2 className="h-4 w-4 mr-2" />
             Organization
@@ -547,13 +879,21 @@ export default function Settings() {
             <GraduationCap className="h-4 w-4 mr-2" />
             Classes
           </TabsTrigger>
+          <TabsTrigger value="subjects" data-testid="tab-subjects">
+            <BookOpen className="h-4 w-4 mr-2" />
+            Subjects
+          </TabsTrigger>
           <TabsTrigger value="notifications" data-testid="tab-notifications">
             <Bell className="h-4 w-4 mr-2" />
             Notifications
           </TabsTrigger>
           <TabsTrigger value="logs" data-testid="tab-logs">
             <FileText className="h-4 w-4 mr-2" />
-            Logs
+            Behavior
+          </TabsTrigger>
+          <TabsTrigger value="academic" data-testid="tab-academic">
+            <Award className="h-4 w-4 mr-2" />
+            Academic
           </TabsTrigger>
         </TabsList>
 
@@ -993,6 +1333,176 @@ export default function Settings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="subjects" className="mt-6 space-y-6">
+          <Card data-testid="card-subjects">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Subjects</CardTitle>
+                  <CardDescription>
+                    Manage the subjects taught at your school
+                  </CardDescription>
+                </div>
+                <Button
+                  data-testid="button-add-subject"
+                  onClick={() => {
+                    setEditSubject(null);
+                    setIsSubjectDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Subject
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingSubjects ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">Loading subjects...</p>
+                </div>
+              ) : subjects.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">No subjects yet. Add your first subject to get started.</p>
+                  <Button
+                    onClick={() => {
+                      setEditSubject(null);
+                      setIsSubjectDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Subject
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {subjects.map((subject, index) => (
+                    <div
+                      key={subject.id}
+                      className="border rounded-lg p-4 flex items-center gap-4"
+                      data-testid={`subject-item-${index}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{subject.name}</p>
+                          {subject.isDefault && <Badge variant="outline" className="text-xs">Default</Badge>}
+                          {subject.isArchived && <Badge variant="secondary" className="text-xs">Archived</Badge>}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{subject.code || "No code"}</p>
+                        <p className="text-sm text-muted-foreground">{subject.description || "No description"}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-edit-subject-${index}`}
+                          onClick={() => {
+                            setEditSubject(subject);
+                            setIsSubjectDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          data-testid={`button-delete-subject-${index}`}
+                          onClick={() => setDeleteSubjectId(subject.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="academic" className="mt-6 space-y-6">
+          <Card data-testid="card-academic-categories">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Academic Log Categories</CardTitle>
+                  <CardDescription>
+                    Manage the categories used for classifying academic logs
+                  </CardDescription>
+                </div>
+                <Button
+                  data-testid="button-add-academic-category"
+                  onClick={() => {
+                    setEditAcademicCategory(null);
+                    setIsAcademicCategoryDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Category
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingAcademicCategories ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">Loading categories...</p>
+                </div>
+              ) : academicCategories.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">No categories yet. Add your first category to get started.</p>
+                  <Button
+                    onClick={() => {
+                      setEditAcademicCategory(null);
+                      setIsAcademicCategoryDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Category
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {academicCategories.map((category, index) => (
+                    <div
+                      key={category.id}
+                      className="border rounded-lg p-4 flex items-center gap-4"
+                      data-testid={`academic-category-item-${index}`}
+                    >
+                      <div className={`h-8 w-8 rounded-md ${getColorClass(category.color)} flex-shrink-0`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">{category.name}</p>
+                        <p className="text-sm text-muted-foreground">{category.description || "No description"}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-edit-academic-category-${index}`}
+                          onClick={() => {
+                            setEditAcademicCategory(category);
+                            setIsAcademicCategoryDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          data-testid={`button-delete-academic-category-${index}`}
+                          onClick={() => setDeleteAcademicCategoryId(category.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       <CategoryDialog
@@ -1008,6 +1518,20 @@ export default function Settings() {
         onSubmit={handleClassSubmit}
         classData={editClass}
         isPending={editClass ? updateClass.isPending : createClass.isPending}
+      />
+      <SubjectDialog
+        open={isSubjectDialogOpen}
+        onOpenChange={setIsSubjectDialogOpen}
+        onSubmit={handleSubjectSubmit}
+        subjectData={editSubject}
+        isPending={editSubject ? updateSubject.isPending : createSubject.isPending}
+      />
+      <AcademicCategoryDialog
+        open={isAcademicCategoryDialogOpen}
+        onOpenChange={setIsAcademicCategoryDialogOpen}
+        onSubmit={handleAcademicCategorySubmit}
+        category={editAcademicCategory}
+        isPending={editAcademicCategory ? updateAcademicCategory.isPending : createAcademicCategory.isPending}
       />
       <AlertDialog open={!!deleteCategoryId} onOpenChange={(open) => !open && setDeleteCategoryId(null)}>
         <AlertDialogContent>
@@ -1041,6 +1565,44 @@ export default function Settings() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteClassId && deleteClass.mutate(deleteClassId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={!!deleteSubjectId} onOpenChange={(open) => !open && setDeleteSubjectId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Subject</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this subject? This action cannot be undone. Academic logs using this subject will prevent deletion.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteSubjectId && deleteSubject.mutate(deleteSubjectId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={!!deleteAcademicCategoryId} onOpenChange={(open) => !open && setDeleteAcademicCategoryId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Academic Category</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this academic category? This action cannot be undone. Academic logs using this category will prevent deletion.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteAcademicCategoryId && deleteAcademicCategory.mutate(deleteAcademicCategoryId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete

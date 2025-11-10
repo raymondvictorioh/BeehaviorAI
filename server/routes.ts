@@ -3,7 +3,13 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, checkOrganizationAccess, supabase } from "./supabaseAuth";
 import { getChatCompletion, transcribeAudio, generateMeetingSummary } from "./openai";
-import { insertFollowUpSchema, insertStudentResourceSchema } from "@shared/schema";
+import {
+  insertFollowUpSchema,
+  insertStudentResourceSchema,
+  insertSubjectSchema,
+  insertAcademicLogCategorySchema,
+  insertAcademicLogSchema,
+} from "@shared/schema";
 import { z } from "zod";
 
 // Helper function to get userId from request session
@@ -263,6 +269,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         organizationId: organization.id,
         role: "owner",
       });
+
+      // Seed default subjects and academic categories for the new organization
+      await storage.seedDefaultSubjects(organization.id);
+      await storage.seedDefaultAcademicCategories(organization.id);
 
       res.json(organization);
     } catch (error) {
@@ -762,6 +772,203 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting student resource:", error);
       res.status(500).json({ message: "Failed to delete student resource" });
+    }
+  });
+
+  // Subject routes
+  app.get("/api/organizations/:orgId/subjects", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const subjects = await storage.getSubjects(orgId);
+      res.json(subjects);
+    } catch (error) {
+      console.error("Error fetching subjects:", error);
+      res.status(500).json({ message: "Failed to fetch subjects" });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/subjects", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const subjectData = {
+        ...req.body,
+        organizationId: orgId,
+      };
+
+      const validatedData = insertSubjectSchema.parse(subjectData);
+      const newSubject = await storage.createSubject(validatedData);
+      res.json(newSubject);
+    } catch (error: any) {
+      console.error("Error creating subject:", error);
+
+      if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create subject", error: error.message });
+      }
+    }
+  });
+
+  app.patch("/api/organizations/:orgId/subjects/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const updatedSubject = await storage.updateSubject(id, orgId, req.body);
+      res.json(updatedSubject);
+    } catch (error) {
+      console.error("Error updating subject:", error);
+      res.status(500).json({ message: "Failed to update subject" });
+    }
+  });
+
+  app.delete("/api/organizations/:orgId/subjects/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      await storage.deleteSubject(id, orgId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting subject:", error);
+
+      if (error.code === "23503") {
+        res.status(400).json({ message: "Cannot delete subject that is in use by academic logs" });
+      } else {
+        res.status(500).json({ message: "Failed to delete subject" });
+      }
+    }
+  });
+
+  // Academic Log Categories routes
+  app.get("/api/organizations/:orgId/academic-log-categories", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+
+      if (!orgId) {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+
+      const categories = await storage.getAcademicLogCategories(orgId);
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching academic log categories:", error);
+      res.status(500).json({ message: "Failed to fetch academic log categories" });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/academic-log-categories", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const categoryData = {
+        ...req.body,
+        organizationId: orgId,
+      };
+
+      const validatedData = insertAcademicLogCategorySchema.parse(categoryData);
+      const newCategory = await storage.createAcademicLogCategory(validatedData);
+      res.json(newCategory);
+    } catch (error: any) {
+      console.error("Error creating academic log category:", error);
+
+      if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create academic log category", error: error.message });
+      }
+    }
+  });
+
+  app.patch("/api/organizations/:orgId/academic-log-categories/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const updatedCategory = await storage.updateAcademicLogCategory(id, orgId, req.body);
+      res.json(updatedCategory);
+    } catch (error) {
+      console.error("Error updating academic log category:", error);
+      res.status(500).json({ message: "Failed to update academic log category" });
+    }
+  });
+
+  app.delete("/api/organizations/:orgId/academic-log-categories/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      await storage.deleteAcademicLogCategory(id, orgId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting academic log category:", error);
+
+      if (error.code === "23503") {
+        res.status(400).json({ message: "Cannot delete category that is in use by academic logs" });
+      } else {
+        res.status(500).json({ message: "Failed to delete academic log category" });
+      }
+    }
+  });
+
+  // Academic Logs routes
+  app.get("/api/organizations/:orgId/students/:studentId/academic-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const logs = await storage.getAcademicLogs(studentId, orgId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching academic logs:", error);
+      res.status(500).json({ message: "Failed to fetch academic logs" });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/students/:studentId/academic-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const user = req.user;
+
+      const logData = {
+        ...req.body,
+        organizationId: orgId,
+        studentId,
+        assessmentDate: req.body.assessmentDate ? new Date(req.body.assessmentDate) : new Date(),
+        loggedBy: user?.email || "Unknown",
+      };
+
+      const validatedData = insertAcademicLogSchema.parse(logData);
+      const newLog = await storage.createAcademicLog(validatedData);
+      res.json(newLog);
+    } catch (error: any) {
+      console.error("Error creating academic log:", error);
+
+      if (error.code === "23503") {
+        res.status(400).json({ message: "Invalid organization, student, subject, or category ID" });
+      } else if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create academic log", error: error.message });
+      }
+    }
+  });
+
+  app.patch("/api/organizations/:orgId/academic-logs/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+
+      // Convert assessmentDate string to Date if present
+      const updateData = {
+        ...req.body,
+        ...(req.body.assessmentDate && { assessmentDate: new Date(req.body.assessmentDate) }),
+      };
+
+      const updatedLog = await storage.updateAcademicLog(id, orgId, updateData);
+      res.json(updatedLog);
+    } catch (error) {
+      console.error("Error updating academic log:", error);
+      res.status(500).json({ message: "Failed to update academic log" });
+    }
+  });
+
+  app.delete("/api/organizations/:orgId/academic-logs/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      await storage.deleteAcademicLog(id, orgId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting academic log:", error);
+      res.status(500).json({ message: "Failed to delete academic log" });
     }
   });
 

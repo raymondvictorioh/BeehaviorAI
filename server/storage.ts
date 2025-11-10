@@ -9,6 +9,9 @@ import {
   followUps,
   classes,
   studentResources,
+  subjects,
+  academicLogCategories,
+  academicLogs,
   type User,
   type UpsertUser,
   type Organization,
@@ -29,6 +32,12 @@ import {
   type InsertClass,
   type StudentResource,
   type InsertStudentResource,
+  type Subject,
+  type InsertSubject,
+  type AcademicLogCategory,
+  type InsertAcademicLogCategory,
+  type AcademicLog,
+  type InsertAcademicLog,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, ne } from "drizzle-orm";
@@ -100,6 +109,29 @@ export interface IStorage {
   getStudentResources(studentId: string, organizationId: string): Promise<StudentResource[]>;
   createStudentResource(resource: InsertStudentResource): Promise<StudentResource>;
   deleteStudentResource(id: string, organizationId: string): Promise<void>;
+
+  // Subject operations
+  getSubjects(organizationId: string): Promise<Subject[]>;
+  getSubject(id: string, organizationId: string): Promise<Subject | undefined>;
+  createSubject(subject: InsertSubject): Promise<Subject>;
+  updateSubject(id: string, organizationId: string, subject: Partial<InsertSubject>): Promise<Subject>;
+  deleteSubject(id: string, organizationId: string): Promise<void>;
+  seedDefaultSubjects(organizationId: string): Promise<void>;
+
+  // Academic Log Category operations
+  getAcademicLogCategories(organizationId: string): Promise<AcademicLogCategory[]>;
+  createAcademicLogCategory(category: InsertAcademicLogCategory): Promise<AcademicLogCategory>;
+  updateAcademicLogCategory(id: string, organizationId: string, category: Partial<InsertAcademicLogCategory>): Promise<AcademicLogCategory>;
+  deleteAcademicLogCategory(id: string, organizationId: string): Promise<void>;
+  seedDefaultAcademicCategories(organizationId: string): Promise<void>;
+
+  // Academic Log operations
+  getAcademicLogs(studentId: string, organizationId: string): Promise<AcademicLog[]>;
+  getAllAcademicLogs(organizationId: string): Promise<AcademicLog[]>;
+  getAcademicLog(id: string, organizationId: string): Promise<AcademicLog | undefined>;
+  createAcademicLog(log: InsertAcademicLog): Promise<AcademicLog>;
+  updateAcademicLog(id: string, organizationId: string, log: Partial<InsertAcademicLog>): Promise<AcademicLog>;
+  deleteAcademicLog(id: string, organizationId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -632,6 +664,308 @@ export class DatabaseStorage implements IStorage {
           eq(studentResources.organizationId, organizationId)
         )
       );
+  }
+
+  // Subject operations
+  async getSubjects(organizationId: string): Promise<Subject[]> {
+    const results = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.organizationId, organizationId));
+
+    // Sort: defaults first, then by name
+    return results.sort((a, b) => {
+      if (a.isDefault !== b.isDefault) {
+        return a.isDefault ? -1 : 1;
+      }
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }
+
+  async getSubject(id: string, organizationId: string): Promise<Subject | undefined> {
+    const [subject] = await db
+      .select()
+      .from(subjects)
+      .where(and(eq(subjects.id, id), eq(subjects.organizationId, organizationId)));
+    return subject;
+  }
+
+  async createSubject(subject: InsertSubject): Promise<Subject> {
+    const [newSubject] = await db
+      .insert(subjects)
+      .values({
+        ...subject,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return newSubject;
+  }
+
+  async updateSubject(id: string, organizationId: string, subject: Partial<InsertSubject>): Promise<Subject> {
+    const [updated] = await db
+      .update(subjects)
+      .set({
+        ...subject,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(subjects.id, id), eq(subjects.organizationId, organizationId)))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Subject with id ${id} not found in organization ${organizationId}`);
+    }
+
+    return updated;
+  }
+
+  async deleteSubject(id: string, organizationId: string): Promise<void> {
+    await db
+      .delete(subjects)
+      .where(and(eq(subjects.id, id), eq(subjects.organizationId, organizationId)));
+  }
+
+  async seedDefaultSubjects(organizationId: string): Promise<void> {
+    const defaultSubjects: InsertSubject[] = [
+      {
+        organizationId,
+        name: "Mathematics",
+        code: "MATH",
+        description: "Mathematics and numerical reasoning",
+        isDefault: true,
+        isArchived: false,
+      },
+      {
+        organizationId,
+        name: "English",
+        code: "ENG",
+        description: "English language and literature",
+        isDefault: true,
+        isArchived: false,
+      },
+      {
+        organizationId,
+        name: "Science",
+        code: "SCI",
+        description: "General science",
+        isDefault: true,
+        isArchived: false,
+      },
+      {
+        organizationId,
+        name: "History",
+        code: "HIST",
+        description: "History and social studies",
+        isDefault: true,
+        isArchived: false,
+      },
+      {
+        organizationId,
+        name: "Geography",
+        code: "GEO",
+        description: "Geography and earth sciences",
+        isDefault: true,
+        isArchived: false,
+      },
+      {
+        organizationId,
+        name: "Physical Education",
+        code: "PE",
+        description: "Physical education and sports",
+        isDefault: true,
+        isArchived: false,
+      },
+      {
+        organizationId,
+        name: "Art",
+        code: "ART",
+        description: "Visual arts and creativity",
+        isDefault: true,
+        isArchived: false,
+      },
+      {
+        organizationId,
+        name: "Music",
+        code: "MUS",
+        description: "Music and performing arts",
+        isDefault: true,
+        isArchived: false,
+      },
+      {
+        organizationId,
+        name: "Computer Science",
+        code: "CS",
+        description: "Computer science and technology",
+        isDefault: true,
+        isArchived: false,
+      },
+      {
+        organizationId,
+        name: "Foreign Language",
+        code: "LANG",
+        description: "Foreign language studies",
+        isDefault: true,
+        isArchived: false,
+      },
+    ];
+
+    // Check if subjects already exist to avoid duplicates
+    const existing = await this.getSubjects(organizationId);
+    if (existing.length === 0) {
+      await db.insert(subjects).values(defaultSubjects);
+    }
+  }
+
+  // Academic Log Category operations
+  async getAcademicLogCategories(organizationId: string): Promise<AcademicLogCategory[]> {
+    const results = await db
+      .select()
+      .from(academicLogCategories)
+      .where(eq(academicLogCategories.organizationId, organizationId));
+
+    // Sort by display order, then name
+    return results.sort((a, b) => {
+      if (a.displayOrder !== b.displayOrder) {
+        return (a.displayOrder || 0) - (b.displayOrder || 0);
+      }
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }
+
+  async createAcademicLogCategory(category: InsertAcademicLogCategory): Promise<AcademicLogCategory> {
+    const [newCategory] = await db
+      .insert(academicLogCategories)
+      .values({
+        ...category,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return newCategory;
+  }
+
+  async updateAcademicLogCategory(
+    id: string,
+    organizationId: string,
+    category: Partial<InsertAcademicLogCategory>
+  ): Promise<AcademicLogCategory> {
+    const [updated] = await db
+      .update(academicLogCategories)
+      .set({
+        ...category,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(academicLogCategories.id, id), eq(academicLogCategories.organizationId, organizationId)))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Academic category with id ${id} not found in organization ${organizationId}`);
+    }
+
+    return updated;
+  }
+
+  async deleteAcademicLogCategory(id: string, organizationId: string): Promise<void> {
+    await db
+      .delete(academicLogCategories)
+      .where(and(eq(academicLogCategories.id, id), eq(academicLogCategories.organizationId, organizationId)));
+  }
+
+  async seedDefaultAcademicCategories(organizationId: string): Promise<void> {
+    const defaultCategories: InsertAcademicLogCategory[] = [
+      {
+        organizationId,
+        name: "Excellent",
+        description: "Outstanding academic performance",
+        color: "green",
+        displayOrder: 0,
+      },
+      {
+        organizationId,
+        name: "Good",
+        description: "Strong academic performance",
+        color: "blue",
+        displayOrder: 1,
+      },
+      {
+        organizationId,
+        name: "Satisfactory",
+        description: "Meets expectations",
+        color: "amber",
+        displayOrder: 2,
+      },
+      {
+        organizationId,
+        name: "Needs Improvement",
+        description: "Requires additional support",
+        color: "orange",
+        displayOrder: 3,
+      },
+      {
+        organizationId,
+        name: "Concern",
+        description: "Significant academic concerns",
+        color: "red",
+        displayOrder: 4,
+      },
+    ];
+
+    // Check if categories already exist to avoid duplicates
+    const existing = await this.getAcademicLogCategories(organizationId);
+    if (existing.length === 0) {
+      await db.insert(academicLogCategories).values(defaultCategories);
+    }
+  }
+
+  // Academic Log operations
+  async getAcademicLogs(studentId: string, organizationId: string): Promise<AcademicLog[]> {
+    return await db
+      .select()
+      .from(academicLogs)
+      .where(
+        and(
+          eq(academicLogs.studentId, studentId),
+          eq(academicLogs.organizationId, organizationId)
+        )
+      );
+  }
+
+  async getAllAcademicLogs(organizationId: string): Promise<AcademicLog[]> {
+    return await db
+      .select()
+      .from(academicLogs)
+      .where(eq(academicLogs.organizationId, organizationId));
+  }
+
+  async getAcademicLog(id: string, organizationId: string): Promise<AcademicLog | undefined> {
+    const [log] = await db
+      .select()
+      .from(academicLogs)
+      .where(and(eq(academicLogs.id, id), eq(academicLogs.organizationId, organizationId)));
+    return log;
+  }
+
+  async createAcademicLog(log: InsertAcademicLog): Promise<AcademicLog> {
+    const [newLog] = await db.insert(academicLogs).values(log).returning();
+    return newLog;
+  }
+
+  async updateAcademicLog(id: string, organizationId: string, log: Partial<InsertAcademicLog>): Promise<AcademicLog> {
+    const [updated] = await db
+      .update(academicLogs)
+      .set(log)
+      .where(and(eq(academicLogs.id, id), eq(academicLogs.organizationId, organizationId)))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Academic log not found");
+    }
+
+    return updated;
+  }
+
+  async deleteAcademicLog(id: string, organizationId: string): Promise<void> {
+    await db
+      .delete(academicLogs)
+      .where(and(eq(academicLogs.id, id), eq(academicLogs.organizationId, organizationId)));
   }
 }
 

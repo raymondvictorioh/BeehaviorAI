@@ -1,22 +1,436 @@
 # Claude AI Agent Guidelines for BeehaviorAI
 
-## Project Context
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [System Architecture](#system-architecture)
+3. [Communication Guidelines](#communication-guidelines)
+4. [Core Development Patterns](#core-development-patterns)
+5. [Code Review Checklist](#code-review-checklist)
+6. [Common Tasks](#common-tasks)
+7. [Project-Specific Conventions](#project-specific-conventions)
+8. [Resources](#resources)
 
-BeehaviorAI is a school behavior management SaaS application that helps educators track student behavior, interventions, and progress.
+---
+
+## Project Overview
+
+### What is BeehaviorAI?
+
+BeehaviorAI is a SaaS application for school behavior management, designed to help teachers and administrators track student behavior, generate AI-powered summaries, manage meetings, and create reports. The system provides a professional interface for recording behavioral incidents, analyzing trends, and maintaining communication records with students and parents.
+
+### User Preferences
+
+**Preferred communication style:** Simple, everyday language.
+
+### Core Functionality
+
+- Student profile management with behavior tracking
+- Behavior log creation and management (positive, neutral, concern, serious categories)
+- Behavior log editing: Edit incident notes and strategies/follow-up measures
+- Behavior log deletion with confirmation popup to prevent accidental removal
+- Consistent date formatting (dd-MM-yyyy with time) throughout the application
+- AI-generated behavior summaries using OpenAI's GPT-5 model
+- Meeting notes with real-time audio transcription (Whisper API)
+- AI-powered meeting summary generation using GPT-5
+- Dynamic waveform visualization during audio recording
+- Conditional Summary tab that appears after AI summary generation
+- Follow-up task management with rich text descriptions
+- Rich text follow-up management with Kanban board view
+- Follow-up workflow tracking (To-Do, In-Progress, Done, Archived)
+- HTML sanitization for rich text content to prevent XSS attacks
+- Report generation for students and classes
+- Real-time AI assistant for contextual help
+- Student resources management with links
+- **Academic logs system** for tracking student academic performance (NEW)
+
+### Academic Logs System
+
+**Purpose:** Track student academic performance across subjects with categorized assessments, providing a comprehensive view of academic progress alongside behavioral tracking.
+
+**Components:**
+
+1. **Subjects** - School courses/subjects with optional codes and descriptions
+   - 10 default subjects auto-seeded on organization creation:
+     - Mathematics (MATH), English (ENG), Science (SCI), History (HIST)
+     - Geography (GEO), Physical Education (PE), Art (ART), Music (MUS)
+     - Computer Science (CS), Foreign Language (LANG)
+   - Organizations can add custom subjects
+   - Subjects can be archived (hidden from dropdowns but preserved in logs)
+   - Default subjects marked with `isDefault: true` flag
+
+2. **Academic Log Categories** - Performance levels for assessments
+   - 5 default categories auto-seeded on organization creation:
+     - Excellent (green, display order 0)
+     - Good (blue, display order 1)
+     - Satisfactory (amber, display order 2)
+     - Needs Improvement (orange, display order 3)
+     - Concern (red, display order 4)
+   - Organizations can add custom categories with custom colors
+   - Color-coded for visual distinction
+   - Display order controls sorting in dropdowns
+
+3. **Academic Logs** - Individual assessment records
+   - Links students, subjects, and academic categories
+   - Required fields: student, subject, category, assessment date, notes
+   - Optional fields: grade (e.g., "A", "B+"), score (e.g., "85%", "90/100")
+   - Tracks who logged the entry (`loggedBy`) and when (`loggedAt`)
+   - Flexible grading system supports letter grades, percentages, or qualitative notes
+
+**Database Schema:**
+
+```typescript
+// Subjects table
+subjects {
+  id: varchar (UUID)
+  organizationId: varchar (FK → organizations, cascade delete)
+  name: varchar(255) NOT NULL
+  code: varchar(50) NULLABLE
+  description: text NULLABLE
+  isDefault: boolean DEFAULT false
+  isArchived: boolean DEFAULT false
+  createdAt: timestamp
+  updatedAt: timestamp
+}
+
+// Academic Log Categories table
+academic_log_categories {
+  id: varchar (UUID)
+  organizationId: varchar (FK → organizations, cascade delete)
+  name: varchar(100) NOT NULL
+  description: text NULLABLE
+  color: varchar(50) NULLABLE
+  displayOrder: integer DEFAULT 0
+  createdAt: timestamp
+  updatedAt: timestamp
+}
+
+// Academic Logs table
+academic_logs {
+  id: varchar (UUID)
+  organizationId: varchar (FK → organizations)
+  studentId: varchar (FK → students, cascade delete)
+  subjectId: varchar (FK → subjects, restrict delete)
+  categoryId: varchar (FK → academic_log_categories, restrict delete)
+  assessmentDate: timestamp NOT NULL
+  grade: varchar(20) NULLABLE
+  score: varchar(50) NULLABLE
+  notes: text NOT NULL
+  loggedBy: varchar(255) NOT NULL
+  loggedAt: timestamp
+}
+```
+
+**Database Relationships:**
+- **Student deletion** → Academic logs deleted (cascade) - removes all student data
+- **Subject deletion** → Prevented if linked to academic logs (restrict) - maintains data integrity
+- **Category deletion** → Prevented if linked to academic logs (restrict) - maintains data integrity
+
+**API Endpoints:**
+
+*Subjects:*
+- `GET /api/organizations/:orgId/subjects` - Fetch all subjects
+- `POST /api/organizations/:orgId/subjects` - Create subject
+- `PATCH /api/organizations/:orgId/subjects/:id` - Update subject
+- `DELETE /api/organizations/:orgId/subjects/:id` - Delete subject
+
+*Academic Categories:*
+- `GET /api/organizations/:orgId/academic-log-categories` - Fetch all categories
+- `POST /api/organizations/:orgId/academic-log-categories` - Create category
+- `PATCH /api/organizations/:orgId/academic-log-categories/:id` - Update category
+- `DELETE /api/organizations/:orgId/academic-log-categories/:id` - Delete category
+
+*Academic Logs:*
+- `GET /api/organizations/:orgId/students/:studentId/academic-logs` - Fetch student's logs
+- `POST /api/organizations/:orgId/students/:studentId/academic-logs` - Create log
+- `PATCH /api/organizations/:orgId/academic-logs/:id` - Update log
+- `DELETE /api/organizations/:orgId/academic-logs/:id` - Delete log
+
+**Query Key Convention:**
+```typescript
+// Subjects
+["/api/organizations", orgId, "subjects"]
+
+// Academic Categories
+["/api/organizations", orgId, "academic-log-categories"]
+
+// Academic Logs (student-scoped)
+["/api/organizations", orgId, "students", studentId, "academic-logs"]
+```
+
+**Default Seeding:**
+Both default subjects and academic categories are automatically seeded when creating a new organization (`routes.ts` lines 273-275):
+```typescript
+await storage.seedDefaultSubjects(organization.id);
+await storage.seedDefaultAcademicCategories(organization.id);
+```
+
+**Storage Layer:**
+All storage methods follow the same pattern as behavior logs:
+- Organization-scoped queries with multi-tenant isolation
+- Drizzle ORM for type-safe database operations
+- Proper error handling for foreign key constraints
+- Sorting: subjects by isDefault then name; categories by displayOrder then name
+
+**Frontend Implementation Status:**
+- ✅ **Settings Page** - Subjects and Academic Categories management with full CRUD
+  - "Subjects" tab: Create, edit, archive, delete subjects
+  - "Academic" tab: Create, edit, delete academic categories
+  - 100% optimistic updates for instant feedback
+- ⏳ **StudentProfile Page** - Academic Logs tab (UI not yet built)
+  - Will display student's academic logs
+  - Create/edit/delete academic logs
+  - Similar interface to behavior logs tab
+
+**Security:**
+- All endpoints use `isAuthenticated` and `checkOrganizationAccess` middleware
+- Zod schema validation on all API requests
+- Organization-scoped data isolation
+- Foreign key constraints prevent orphaned records
+
+### Recent Changes
+
+**November 10, 2025 - Academic Logs System:**
+- New academic tracking feature alongside behavior management
+- 3 new database tables: subjects, academic_log_categories, academic_logs
+- 15 new API endpoints with full CRUD operations
+- 20+ new storage methods with organization-scoped queries
+- Settings page updated with "Subjects" and "Academic" tabs
+- Default seeding: 10 subjects + 5 academic categories on organization creation
+- 100% optimistic updates following BeehaviorAI patterns
+- Comprehensive API documentation in CLAUDE.md
+
+**November 9, 2025 - Optimistic UI Implementation (100% Coverage):**
+- All 20 mutations now implement optimistic updates
+- Instant UI feedback across all features
+- Comprehensive documentation (OPTIMISTIC_UI.md, CLAUDE.md)
+- Student resources feature with full CRUD operations
+
+**November 8, 2025 - Migration to Supabase Authentication:**
+- Replaced Replit OIDC authentication with Supabase Auth
+- Email/password authentication using Supabase backend
+- Custom login and signup pages with modern UI
+- Session-based authentication with PostgreSQL session storage
+- Environment-specific Supabase projects (DEV/PROD)
+- Email confirmation flow with resend functionality
+- Security improvements: CSRF protection, session regeneration, Zod validation
 
 ### Tech Stack
+
 - **Frontend:** React + TypeScript + Vite + TanStack Router + TanStack Query
 - **UI Library:** shadcn/ui (Radix UI + Tailwind CSS)
 - **Backend:** Express.js + Node.js
 - **Database:** PostgreSQL with Drizzle ORM
 - **Authentication:** Supabase Auth
+- **AI Services:** OpenAI (GPT-5, Whisper API)
 - **Deployment:** Replit/Cloud hosting
 
-### Architecture
+### Architecture Overview
+
 - Multi-tenant SaaS with organization-scoped data
 - RESTful API with organization-based routing
 - Optimistic UI updates for all mutations (100% coverage)
 - Form validation using react-hook-form + Zod schemas
+- Real-time features with WebSocket support
+
+---
+
+## System Architecture
+
+### Frontend Architecture
+
+**Framework:** React with TypeScript, using Vite as the build tool
+
+**UI Component Library:** shadcn/ui components built on Radix UI primitives
+- Material Design-inspired approach with education-focused adaptations
+- Consistent component library in `client/src/components/ui/`
+- Custom business components in `client/src/components/`
+- Design system prioritizes clarity, scannable information, and action-oriented layouts
+
+**Styling:**
+- Tailwind CSS for utility-first styling
+- Custom design tokens defined in `client/src/index.css` with light/dark mode support
+- Theme system with CSS variables for colors, spacing, and elevations
+- Typography uses Inter font family from Google Fonts
+- Spacing follows Tailwind units (2, 4, 6, 8) for consistent layouts
+
+**State Management:**
+- React Query (@tanstack/react-query) for server state management
+- Local React state for UI interactions
+- Custom queryClient configuration in `client/src/lib/queryClient.ts`
+- 100% optimistic update coverage for instant feedback
+
+**Routing:** wouter for lightweight client-side routing
+
+**Key Pages:**
+- Dashboard: Overview statistics and recent activity
+- Students: Grid view of all students with search
+- StudentProfile: Detailed view with tabs for logs, meetings, follow-ups, resources
+- Reports: Report generation interface
+- Settings: School configuration (organization, categories, classes)
+- Onboarding: One-time organization setup
+
+**Design Principles:**
+- Information should be immediately scannable
+- Primary actions prominently placed
+- Minimize clicks to common tasks
+- Professional aesthetic conveying trust and reliability
+- Instant feedback through optimistic updates
+
+### Backend Architecture
+
+**Framework:** Express.js with TypeScript
+
+**API Structure:**
+- RESTful endpoints registered in `server/routes.ts`
+- Authentication endpoints: `/api/auth/user`, `/api/auth/login`, `/api/auth/signup`, `/api/auth/logout`
+- Organization endpoints: `/api/organizations`, `/api/organizations/:id/users`, `/api/organizations/:id/stats`
+- Student endpoints: `/api/organizations/:orgId/students`
+- Resource endpoints: `/api/organizations/:orgId/students/:studentId/resources`
+- AI assistant: `/api/assistant/chat`
+- Audio transcription: POST `/api/transcribe` (Whisper API)
+- Meeting summary generation: POST `/api/generate-meeting-summary` (GPT-5)
+- All organization-scoped routes protected with checkOrganizationAccess middleware
+- Session-based authentication using Supabase
+
+**Development Server:**
+- Vite dev server integrated for HMR
+- Custom logging middleware for API requests
+- JSON body parsing with raw body preservation for webhooks
+
+**Storage Layer:**
+- Interface-based storage system (`IStorage`) in `server/storage.ts`
+- Uses DatabaseStorage implementation with PostgreSQL
+- Multi-tenant architecture with organization-scoped data access
+- All operations enforce organization isolation via checkOrganizationAccess middleware
+
+### Data Storage
+
+**ORM:** Drizzle ORM configured for PostgreSQL
+- Schema defined in `shared/schema.ts`
+- Database client: Neon serverless PostgreSQL (`@neondatabase/serverless`)
+- Migrations directory: `./migrations`
+- WebSocket support for Neon using `ws` package
+
+**Current Schema:**
+
+- **Users table:** id, email, name, supabase_user_id
+- **Organizations table:** id, name, code, email, phone, address, owner_id, created_at
+- **Organization_users table:** user_id, organization_id, role, joined_at (for multi-tenant access control)
+- **Students table:** id, organization_id, name, email, class_id, gender, created_at, updated_at
+  - Unique constraint on (organization_id, email) via "unique_email_per_org" index
+  - Email uniqueness enforced per organization (students in different orgs can share emails)
+- **Behavior_log_categories table:** id, organization_id, name, description (nullable), color (nullable), display_order, created_at, updated_at
+  - Organization-specific categories for classifying behavior logs
+  - 4 default categories auto-seeded on organization creation: Positive (green), Neutral (blue), Concern (amber), Serious (red)
+  - Available colors: green, blue, amber, red, purple, pink, orange, teal, indigo
+- **Behavior_logs table:** id, organization_id, student_id, category_id (foreign key to behavior_log_categories), incident_date, notes, strategies (nullable), logged_by, logged_at
+  - Uses categoryId foreign key instead of category string for flexible, organization-specific categories
+- **Meeting_notes table:** id, organization_id, student_id, date, participants, summary, full_notes
+- **Follow_ups table:** id, organization_id, student_id, title, description (rich text HTML), due_date (nullable), status (To-Do, In-Progress, Done, Archived), assignee (nullable), created_at, updated_at
+  - Description field stores sanitized HTML from rich text editor
+  - Status field replaced priority field for workflow management
+  - Assignee field tracks task ownership
+- **Classes table:** id, organization_id, name, grade_level (nullable), created_at, updated_at
+- **Student_resources table:** id, organization_id, student_id, title, url, created_at
+  - Stores links and resources for students
+  - Cascade delete on student removal
+- Schema uses Drizzle-Zod for type-safe validation
+
+**Database Configuration:**
+- Connection pooling via Neon Pool
+- Database URL expected in `DATABASE_URL` environment variable
+- Schema push command: `npm run db:push`
+
+**Multi-Tenant Implementation:**
+- All organization-scoped data includes organization_id foreign key
+- checkOrganizationAccess middleware enforces data isolation
+- Dashboard and Students pages use React Query to fetch real database data
+- Dashboard stats filter follow-ups by status (excludes Done and Archived from pending count)
+
+### External Dependencies
+
+**AI Service:**
+- OpenAI API integration in `server/openai.ts`
+- Uses GPT-5 model (as of August 2025)
+- Uses Whisper API for real-time audio transcription
+- Requires `OPENAI_API_KEY` environment variable
+- Features:
+  - Contextual AI assistant based on current page
+  - Behavior summaries for students
+  - Meeting summary generation from notes and transcripts
+  - Real-time audio transcription in 3-second chunks
+- Meeting Summary Generation:
+  - Analyzes notes and transcripts using GPT-5
+  - Generates structured summaries with key points, action items, and recommendations
+  - Appears in conditional "Summary" tab after generation
+  - User-friendly error messages when API key is invalid/missing
+
+**Database:**
+- Neon serverless PostgreSQL
+- Connection via `@neondatabase/serverless` package
+- WebSocket support for real-time capabilities
+
+**UI Component Dependencies:**
+- Radix UI primitives for accessible components
+- Lucide React for icons
+- React Hook Form with Zod resolvers for form validation
+- date-fns for date formatting
+- cmdk for command palette functionality
+- Tiptap for rich text editing (follow-up descriptions)
+- DOMPurify (isomorphic-dompurify) for HTML sanitization and XSS prevention
+
+**Development Tools:**
+- TypeScript for type safety across stack
+- ESBuild for production builds
+- PostCSS with Autoprefixer for CSS processing
+
+**Session Management:**
+- `connect-pg-simple` for PostgreSQL-backed sessions
+- Prepared for production session storage
+
+### Optimistic UI Implementation
+
+**Pattern:** All mutations follow a standardized optimistic update pattern using TanStack Query (React Query) for instant user feedback.
+
+**Documentation:** See [OPTIMISTIC_UI.md](./OPTIMISTIC_UI.md) for complete implementation guide.
+
+**Current Coverage:**
+- 20 out of 20 mutations (100%) implement optimistic updates
+- All user-facing CRUD operations provide instant feedback
+- Consistent pattern across all features
+
+**Implementation Strategy:**
+1. **onMutate**: Cancel queries, snapshot data, update cache optimistically, close dialogs
+2. **onSuccess**: Replace temporary IDs with real server data
+3. **onError**: Rollback to previous state, reopen dialogs for retry
+4. **onSettled**: Invalidate queries for eventual consistency
+
+**Key Benefits:**
+- Immediate UI feedback (no loading spinners for successful operations)
+- Automatic rollback on errors
+- Consistent UX across all features
+- Reduced perceived latency (instant vs 500ms-2s wait time)
+
+**Implementation Details:**
+- Temporary IDs: `temp-${Date.now()}`
+- Query cancellation prevents race conditions
+- Context-based rollback on errors
+- Dialog closure in onMutate for better UX
+- Settled invalidation ensures data consistency
+
+**Query Key Convention:**
+All queries follow organization-scoped pattern:
+```typescript
+["/api/organizations", orgId, "resource-type", optionalId]
+```
+
+**Examples in Codebase:**
+- CREATE: `createBehaviorLog`, `createFollowUp`, `createResource` (StudentProfile.tsx)
+- UPDATE: `updateBehaviorLog`, `updateFollowUp`, `updateStudent` (StudentProfile.tsx, AddStudentDialog.tsx)
+- DELETE: `deleteBehaviorLog`, `deleteFollowUp`, `deleteResource` (StudentProfile.tsx)
+- Multi-query: `updateStudent` updates both list and detail queries (AddStudentDialog.tsx)
+
+---
 
 ## Communication Guidelines
 
@@ -32,6 +446,8 @@ BeehaviorAI is a school behavior management SaaS application that helps educator
 - Suggest improvements or alternatives when appropriate
 - Explain trade-offs when multiple approaches exist
 - Anticipate edge cases and potential issues
+
+---
 
 ## Core Development Patterns
 
@@ -215,6 +631,8 @@ interface AddStudentDialogProps {
 }
 ```
 
+---
+
 ## Code Review Checklist
 
 When reviewing code or making suggestions, verify:
@@ -257,6 +675,8 @@ When reviewing code or making suggestions, verify:
 - [ ] Authentication required for protected routes
 - [ ] XSS prevention (React handles this by default)
 - [ ] SQL injection prevented (Drizzle ORM handles this)
+
+---
 
 ## Common Tasks
 
@@ -339,6 +759,8 @@ When reviewing code or making suggestions, verify:
 
 See "Migration Guide" in OPTIMISTIC_UI.md for step-by-step instructions.
 
+---
+
 ## Testing Strategy
 
 ### Manual Testing
@@ -365,6 +787,8 @@ See "Migration Guide" in OPTIMISTIC_UI.md for step-by-step instructions.
 - Network tab (monitor API calls)
 - Console logs (add temporarily for debugging)
 
+---
+
 ## Project-Specific Conventions
 
 ### Organization Context
@@ -386,31 +810,32 @@ Most features revolve around students:
 - All routes include organization ID
 - Server middleware validates access
 
-## Performance Best Practices
+### Performance Best Practices
 
-### Query Optimization
+#### Query Optimization
 - Use `staleTime` appropriately (default: 0)
 - Use `cacheTime` to keep inactive data (default: 5 minutes)
 - Prefetch related data when appropriate
 - Use optimistic updates to hide latency
 
-### Bundle Size
+#### Bundle Size
 - Import only what you need from libraries
 - Use tree-shaking friendly imports
 - Lazy load routes and components when appropriate
 - Monitor bundle size during builds
 
-### Rendering
+#### Rendering
 - Use React.memo for expensive components
 - Avoid unnecessary re-renders
 - Use proper key props in lists
 - Minimize state updates
 
+---
+
 ## Resources
 
 ### Documentation
 - [OPTIMISTIC_UI.md](./OPTIMISTIC_UI.md) - Detailed optimistic UI pattern guide
-- [CURSOR.md](./CURSOR.md) - System architecture and overview
 - [TanStack Query Docs](https://tanstack.com/query/latest/docs/react/overview)
 - [React Hook Form Docs](https://react-hook-form.com/)
 - [shadcn/ui Docs](https://ui.shadcn.com/)
@@ -424,11 +849,13 @@ Most features revolve around students:
 
 ### Example Patterns
 Reference these files for examples:
-- **Optimistic CREATE**: StudentProfile.tsx (createBehaviorLog, createFollowUp)
+- **Optimistic CREATE**: StudentProfile.tsx (createBehaviorLog, createFollowUp, createResource)
 - **Optimistic UPDATE**: StudentProfile.tsx (updateBehaviorLog, updateFollowUp)
 - **Optimistic DELETE**: StudentProfile.tsx (deleteResource, deleteBehaviorLog)
 - **Multi-query updates**: AddStudentDialog.tsx (updateStudent)
 - **Form validation**: AddStudentDialog.tsx, AddResourceDialog.tsx
+
+---
 
 ## When to Ask Questions
 
@@ -446,7 +873,15 @@ Reference these files for examples:
 - Best practice is obvious
 - Question would delay simple tasks unnecessarily
 
+---
+
 ## Version History
+
+- **v1.1** (2025-11-09): Combined CURSOR.md and CLAUDE.md
+  - Merged system architecture and development guidelines
+  - Added comprehensive project overview
+  - Included complete schema documentation
+  - Unified all development patterns and conventions
 
 - **v1.0** (2025-11-09): Initial documentation
   - 100% optimistic UI coverage (20/20 mutations)

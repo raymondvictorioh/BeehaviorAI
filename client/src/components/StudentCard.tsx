@@ -53,7 +53,7 @@ export function StudentCard({
             <p className="text-sm text-muted-foreground truncate">{email}</p>
             <div className="flex items-center gap-2 mt-2">
               <Badge variant="secondary" className="text-xs" data-testid={`badge-class-${id}`}>
-                {className}
+                {className || "N.A"}
               </Badge>
               <span className="text-xs text-muted-foreground">
                 {logsCount} {logsCount === 1 ? "log" : "logs"}

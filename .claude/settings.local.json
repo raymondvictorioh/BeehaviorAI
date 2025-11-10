@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(pkill:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(lsof:*)",
+      "Bash(npm run db:push:*)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(npm run db:migrate:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

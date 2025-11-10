@@ -5,6 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BehaviorLogEntry } from "@/components/BehaviorLogEntry";
 import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
+import { AcademicLogEntry } from "@/components/AcademicLogEntry";
+import { AcademicLogDetailsSheet } from "@/components/AcademicLogDetailsSheet";
+import { AddAcademicLogDialog } from "@/components/AddAcademicLogDialog";
 import { AIInsightsPanel } from "@/components/AIInsightsPanel";
 import { MeetingNoteCard } from "@/components/MeetingNoteCard";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
@@ -19,7 +22,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Student, BehaviorLog, MeetingNote, FollowUp, BehaviorLogCategory, Class, StudentResource } from "@shared/schema";
+import type { Student, BehaviorLog, MeetingNote, FollowUp, BehaviorLogCategory, Class, StudentResource, AcademicLog, Subject, AcademicLogCategory } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function StudentProfile() {
@@ -32,6 +35,9 @@ export default function StudentProfile() {
   const [isAddLogDialogOpen, setIsAddLogDialogOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [isLogDetailsOpen, setIsLogDetailsOpen] = useState(false);
+  const [isAddAcademicLogDialogOpen, setIsAddAcademicLogDialogOpen] = useState(false);
+  const [selectedAcademicLog, setSelectedAcademicLog] = useState<any>(null);
+  const [isAcademicLogDetailsOpen, setIsAcademicLogDetailsOpen] = useState(false);
   const [isAddFollowUpDialogOpen, setIsAddFollowUpDialogOpen] = useState(false);
   const [editFollowUp, setEditFollowUp] = useState<FollowUp | null>(null);
   const [isAddMeetingDialogOpen, setIsAddMeetingDialogOpen] = useState(false);
@@ -79,6 +85,24 @@ export default function StudentProfile() {
   const { data: resources = [] } = useQuery<StudentResource[]>({
     queryKey: ["/api/organizations", orgId, "students", studentId, "resources"],
     enabled: !!orgId && !!studentId,
+  });
+
+  // Fetch academic logs
+  const { data: academicLogs = [] } = useQuery<AcademicLog[]>({
+    queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"],
+    enabled: !!orgId && !!studentId,
+  });
+
+  // Fetch subjects
+  const { data: subjects = [] } = useQuery<Subject[]>({
+    queryKey: ["/api/organizations", orgId, "subjects"],
+    enabled: !!orgId,
+  });
+
+  // Fetch academic log categories
+  const { data: academicCategories = [] } = useQuery<AcademicLogCategory[]>({
+    queryKey: ["/api/organizations", orgId, "academic-log-categories"],
+    enabled: !!orgId,
   });
 
   // Create a map of classId to className for quick lookup
@@ -741,6 +765,220 @@ export default function StudentProfile() {
     },
   });
 
+  // Create academic log mutation with optimistic updates
+  const createAcademicLog = useMutation({
+    mutationFn: async (data: {
+      date: string;
+      subjectId: string;
+      categoryId: string;
+      grade?: string;
+      score?: string;
+      notes: string;
+    }) => {
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/academic-logs`, {
+        assessmentDate: new Date(data.date).toISOString(),
+        subjectId: data.subjectId,
+        categoryId: data.categoryId,
+        grade: data.grade || null,
+        score: data.score || null,
+        notes: data.notes,
+        loggedBy: user?.email || "Unknown",
+      });
+      return await res.json();
+    },
+    onMutate: async (newLog) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"] });
+
+      const previousLogs = queryClient.getQueryData<AcademicLog[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "academic-logs",
+      ]);
+
+      const tempId = `temp-${Date.now()}`;
+      const optimisticLog: AcademicLog = {
+        id: tempId,
+        organizationId: orgId!,
+        studentId: studentId!,
+        subjectId: newLog.subjectId,
+        categoryId: newLog.categoryId,
+        assessmentDate: new Date(newLog.date),
+        grade: newLog.grade || null,
+        score: newLog.score || null,
+        notes: newLog.notes,
+        loggedBy: user?.email || "Unknown",
+        loggedAt: new Date(),
+      };
+
+      if (previousLogs) {
+        queryClient.setQueryData<AcademicLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "academic-logs"],
+          [...previousLogs, optimisticLog]
+        );
+      } else {
+        queryClient.setQueryData<AcademicLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "academic-logs"],
+          [optimisticLog]
+        );
+      }
+
+      setIsAddAcademicLogDialogOpen(false);
+      return { previousLogs, tempId };
+    },
+    onSuccess: (data: AcademicLog, _variables, context) => {
+      const previousLogs = queryClient.getQueryData<AcademicLog[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "academic-logs",
+      ]);
+
+      if (previousLogs && context?.tempId) {
+        queryClient.setQueryData<AcademicLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "academic-logs"],
+          previousLogs.map((log) => (log.id === context.tempId ? data : log))
+        );
+      }
+
+      toast({
+        title: "Academic log added",
+        description: "The academic assessment has been successfully recorded.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousLogs) {
+        queryClient.setQueryData<AcademicLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "academic-logs"],
+          context.previousLogs
+        );
+      }
+      setIsAddAcademicLogDialogOpen(true);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add academic log. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"] });
+    },
+  });
+
+  // Update academic log mutation with optimistic updates
+  const updateAcademicLog = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<{ grade: string; score: string; notes: string }> }) => {
+      return apiRequest("PATCH", `/api/organizations/${orgId}/academic-logs/${id}`, updates);
+    },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"] });
+
+      const previousLogs = queryClient.getQueryData<AcademicLog[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "academic-logs",
+      ]);
+
+      if (previousLogs) {
+        queryClient.setQueryData<AcademicLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "academic-logs"],
+          previousLogs.map((log) => (log.id === id ? { ...log, ...updates } : log))
+        );
+      }
+
+      // Update the selected log with the new data
+      if (selectedAcademicLog && selectedAcademicLog.id === id) {
+        setSelectedAcademicLog((prev: any) => ({
+          ...prev,
+          ...updates,
+        }));
+      }
+
+      return { previousLogs };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Academic log updated",
+        description: "The academic assessment has been successfully updated.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousLogs) {
+        queryClient.setQueryData<AcademicLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "academic-logs"],
+          context.previousLogs
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update academic log. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"] });
+    },
+  });
+
+  // Delete academic log mutation with optimistic updates
+  const deleteAcademicLog = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/organizations/${orgId}/academic-logs/${id}`);
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"] });
+
+      const previousLogs = queryClient.getQueryData<AcademicLog[]>([
+        "/api/organizations",
+        orgId,
+        "students",
+        studentId,
+        "academic-logs",
+      ]);
+
+      if (previousLogs) {
+        queryClient.setQueryData<AcademicLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "academic-logs"],
+          previousLogs.filter((log) => log.id !== id)
+        );
+      }
+
+      // Close details sheet if viewing the deleted log
+      if (selectedAcademicLog && selectedAcademicLog.id === id) {
+        setIsAcademicLogDetailsOpen(false);
+        setSelectedAcademicLog(null);
+      }
+
+      return { previousLogs };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Academic log deleted",
+        description: "The academic assessment has been successfully deleted.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousLogs) {
+        queryClient.setQueryData<AcademicLog[]>(
+          ["/api/organizations", orgId, "students", studentId, "academic-logs"],
+          context.previousLogs
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete academic log. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"] });
+    },
+  });
+
   const handleViewLog = (log: any) => {
     // Find category name from categoryId
     const category = categories.find(cat => cat.id === log.categoryId);
@@ -763,6 +1001,37 @@ export default function StudentProfile() {
 
   const handleDeleteLog = (id: string) => {
     deleteBehaviorLog.mutate(id);
+  };
+
+  const handleViewAcademicLog = (log: any) => {
+    // Find subject name and category name from IDs
+    const subject = subjects.find(s => s.id === log.subjectId);
+    const category = academicCategories.find(c => c.id === log.categoryId);
+    // Add subject and category details to log object for the details sheet
+    const logWithDetails = {
+      ...log,
+      subject: subject?.name || "Unknown",
+      category: category?.name || "Unknown",
+      categoryColor: category?.color || null,
+    };
+    setSelectedAcademicLog(logWithDetails);
+    setIsAcademicLogDetailsOpen(true);
+  };
+
+  const handleUpdateGrade = (id: string, grade: string) => {
+    updateAcademicLog.mutate({ id, updates: { grade } });
+  };
+
+  const handleUpdateScore = (id: string, score: string) => {
+    updateAcademicLog.mutate({ id, updates: { score } });
+  };
+
+  const handleUpdateAcademicNotes = (id: string, notes: string) => {
+    updateAcademicLog.mutate({ id, updates: { notes } });
+  };
+
+  const handleDeleteAcademicLog = (id: string) => {
+    deleteAcademicLog.mutate(id);
   };
 
   const getInitials = () => {
@@ -917,8 +1186,9 @@ export default function StudentProfile() {
 
       {/* Row 2: Tabs with Kanban - Full width */}
       <Tabs defaultValue="logs" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
+        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
           <TabsTrigger value="logs" data-testid="tab-logs">Behavior Logs</TabsTrigger>
+          <TabsTrigger value="academic" data-testid="tab-academic">Academic Logs</TabsTrigger>
           <TabsTrigger value="followups" data-testid="tab-followups">Follow-ups</TabsTrigger>
           <TabsTrigger value="meetings" data-testid="tab-meetings">Meeting Notes</TabsTrigger>
         </TabsList>
@@ -958,6 +1228,53 @@ export default function StudentProfile() {
                     category={category?.name || "Unknown"}
                     notes={log.notes || ""}
                     onView={() => handleViewLog(log)}
+                  />
+                );
+              })
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="academic" className="space-y-4 mt-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Academic Logs</h2>
+            <Button onClick={() => setIsAddAcademicLogDialogOpen(true)} data-testid="button-add-academic-log">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Academic Log
+            </Button>
+          </div>
+          <div className="space-y-4">
+            {academicLogs.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center py-8">
+                    <GraduationCap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground mb-4">
+                      No academic assessments recorded yet
+                    </p>
+                    <Button onClick={() => setIsAddAcademicLogDialogOpen(true)} data-testid="button-add-first-academic-log">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First Academic Log
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              academicLogs.map((log) => {
+                const subject = subjects.find(s => s.id === log.subjectId);
+                const category = academicCategories.find(c => c.id === log.categoryId);
+                return (
+                  <AcademicLogEntry
+                    key={log.id}
+                    id={log.id}
+                    date={format(new Date(log.assessmentDate), "dd-MM-yyyy")}
+                    subject={subject?.name || "Unknown"}
+                    category={category?.name || "Unknown"}
+                    categoryColor={category?.color || null}
+                    grade={log.grade}
+                    score={log.score}
+                    notes={log.notes || ""}
+                    onView={() => handleViewAcademicLog(log)}
                   />
                 );
               })
@@ -1128,6 +1445,24 @@ export default function StudentProfile() {
         onOpenChange={setIsAddResourceDialogOpen}
         onSubmit={async (data) => createResource.mutate(data)}
         isPending={createResource.isPending}
+      />
+
+      <AddAcademicLogDialog
+        open={isAddAcademicLogDialogOpen}
+        onOpenChange={setIsAddAcademicLogDialogOpen}
+        onSubmit={(data) => createAcademicLog.mutate(data)}
+        subjects={subjects}
+        categories={academicCategories}
+      />
+
+      <AcademicLogDetailsSheet
+        open={isAcademicLogDetailsOpen}
+        onOpenChange={setIsAcademicLogDetailsOpen}
+        log={selectedAcademicLog}
+        onUpdateGrade={handleUpdateGrade}
+        onUpdateScore={handleUpdateScore}
+        onUpdateNotes={handleUpdateAcademicNotes}
+        onDelete={handleDeleteAcademicLog}
       />
     </div>
   );
