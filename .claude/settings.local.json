@@ -9,7 +9,6 @@
       "Bash(npm rebuild:*)",
       "Bash(sudo chown:*)",
       "Bash(curl:*)"
-      "Bash(cat:*)",
       "Bash(lsof:*)",
       "Bash(npm run db:push:*)",
       "Bash(npx drizzle-kit:*)",
