@@ -716,44 +716,372 @@ When reviewing code or making suggestions, verify:
    - Test rapid consecutive operations
    - Test empty cache scenario
 
-### Adding a New API Endpoint
+### Building a Complete Feature
 
-1. **Define schema in `shared/schema.ts`**
-   ```typescript
-   export const resources = pgTable("resources", {
-     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-     // ... other fields
-   });
+**CRITICAL: Always follow this API-first workflow to prevent route configuration errors.**
 
-   export const insertResourceSchema = createInsertSchema(resources);
-   export type InsertResource = z.infer<typeof insertResourceSchema>;
-   ```
+#### Overview: API-First Development Workflow
 
-2. **Create route in `server/routes.ts`**
-   ```typescript
-   app.post(
-     "/api/organizations/:orgId/resources",
-     isAuthenticated,
-     checkOrganizationAccess,
-     async (req: any, res) => {
-       const { orgId } = req.params;
-       const validated = insertResourceSchema.parse(req.body);
-       const result = await storage.createResource(validated);
-       res.json(result);
-     }
-   );
-   ```
+For BeehaviorAI, **always follow this order**:
+1. **Schema** (shared/schema.ts) → 2. **Storage** (server/storage.ts) → 3. **Routes** (server/routes.ts) → 4. **Frontend**
 
-3. **Add storage method in `server/storage.ts`**
-   ```typescript
-   async createResource(data: InsertResource): Promise<Resource> {
-     const [resource] = await db.insert(resources).values(data).returning();
-     return resource;
-   }
-   ```
+This ensures proper validation, security, and data handling before UI integration.
 
-4. **Create frontend mutation** (with optimistic updates!)
-5. **Test endpoint** with various scenarios
+---
+
+#### Phase 1: Database Schema (shared/schema.ts)
+
+**What to do:**
+```typescript
+// 1. Define table schema with proper foreign keys
+export const resources = pgTable("resources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  studentId: varchar("student_id").notNull().references(() => students.id),
+  title: varchar("title", { length: 255 }).notNull(),
+  url: text("url").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 2. Create Zod validation schemas
+export const insertResourceSchema = createInsertSchema(resources);
+export const updateResourceSchema = insertResourceSchema.partial();
+
+// 3. Export TypeScript types
+export type Resource = typeof resources.$inferSelect;
+export type InsertResource = z.infer<typeof insertResourceSchema>;
+export type UpdateResource = z.infer<typeof updateResourceSchema>;
+```
+
+**Checklist:**
+- [ ] Table includes `organizationId` foreign key (multi-tenant requirement)
+- [ ] Proper foreign key relationships defined with `.references()`
+- [ ] Insert schema created with `createInsertSchema()`
+- [ ] Update schema created with `.partial()` for PATCH operations
+- [ ] TypeScript types exported for use in frontend/backend
+
+---
+
+#### Phase 2: Storage Layer (server/storage.ts)
+
+**What to do:**
+```typescript
+// Add methods to IStorage interface first
+interface IStorage {
+  // CREATE
+  createResource(data: InsertResource): Promise<Resource>;
+
+  // READ (organization-scoped or student-scoped)
+  getStudentResources(studentId: string, organizationId: string): Promise<Resource[]>;
+  getAllResources(organizationId: string): Promise<Resource[]>;
+
+  // UPDATE (if needed)
+  updateResource(id: string, organizationId: string, data: Partial<Resource>): Promise<Resource>;
+
+  // DELETE
+  deleteResource(id: string, organizationId: string): Promise<void>;
+}
+
+// Then implement in DatabaseStorage class
+class DatabaseStorage implements IStorage {
+  async createResource(data: InsertResource): Promise<Resource> {
+    const [resource] = await db.insert(resources).values(data).returning();
+    return resource;
+  }
+
+  async getStudentResources(studentId: string, organizationId: string): Promise<Resource[]> {
+    return await db
+      .select()
+      .from(resources)
+      .where(
+        and(
+          eq(resources.studentId, studentId),
+          eq(resources.organizationId, organizationId) // CRITICAL: Always filter by org
+        )
+      )
+      .orderBy(desc(resources.createdAt));
+  }
+
+  async deleteResource(id: string, organizationId: string): Promise<void> {
+    await db
+      .delete(resources)
+      .where(
+        and(
+          eq(resources.id, id),
+          eq(resources.organizationId, organizationId) // CRITICAL: Prevent cross-org access
+        )
+      );
+  }
+}
+```
+
+**Checklist:**
+- [ ] Methods added to `IStorage` interface
+- [ ] Methods implemented in `DatabaseStorage` class
+- [ ] **ALL queries filter by `organizationId`** (multi-tenant isolation)
+- [ ] Proper error handling for database constraints
+- [ ] Methods use Drizzle ORM (not raw SQL)
+- [ ] Appropriate sorting with `.orderBy()`
+
+---
+
+#### Phase 3: API Routes (server/routes.ts) - MOST CRITICAL
+
+**Route Pattern Examples:**
+
+```typescript
+// Import schemas at the top of routes.ts
+import { insertResourceSchema, updateResourceSchema } from "@shared/schema";
+
+// ========================================
+// GET - Fetch resources (list)
+// ========================================
+app.get(
+  "/api/organizations/:orgId/students/:studentId/resources",
+  isAuthenticated,              // ✅ ALWAYS include
+  checkOrganizationAccess,      // ✅ ALWAYS include for org routes
+  async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const resources = await storage.getStudentResources(studentId, orgId);
+      res.json(resources);
+    } catch (error) {
+      console.error("Error fetching resources:", error);
+      res.status(500).json({ message: "Failed to fetch resources" });
+    }
+  }
+);
+
+// ========================================
+// POST - Create new resource
+// ========================================
+app.post(
+  "/api/organizations/:orgId/students/:studentId/resources",
+  isAuthenticated,
+  checkOrganizationAccess,
+  async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+
+      // Inject organization/student IDs into request body
+      const resourceData = {
+        ...req.body,
+        organizationId: orgId,
+        studentId,
+      };
+
+      // ✅ ALWAYS validate with Zod schema
+      const validatedData = insertResourceSchema.parse(resourceData);
+
+      const newResource = await storage.createResource(validatedData);
+      res.json(newResource);
+    } catch (error: any) {
+      console.error("Error creating resource:", error);
+
+      // Handle specific error types
+      if (error.code === "23503") {
+        // Foreign key violation
+        res.status(400).json({ message: "Invalid organization or student ID" });
+      } else if (error.name === "ZodError") {
+        // Validation error
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create resource", error: error.message });
+      }
+    }
+  }
+);
+
+// ========================================
+// PATCH - Update resource
+// ========================================
+app.patch(
+  "/api/organizations/:orgId/resources/:id",
+  isAuthenticated,
+  checkOrganizationAccess,
+  async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+
+      // ✅ Validate partial updates
+      const validatedData = updateResourceSchema.parse(req.body);
+
+      const updatedResource = await storage.updateResource(id, orgId, validatedData);
+      res.json(updatedResource);
+    } catch (error: any) {
+      console.error("Error updating resource:", error);
+
+      if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to update resource" });
+      }
+    }
+  }
+);
+
+// ========================================
+// DELETE - Delete resource
+// ========================================
+app.delete(
+  "/api/organizations/:orgId/resources/:id",
+  isAuthenticated,
+  checkOrganizationAccess,
+  async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      await storage.deleteResource(id, orgId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting resource:", error);
+      res.status(500).json({ message: "Failed to delete resource" });
+    }
+  }
+);
+```
+
+**CRITICAL Route Checklist (Verify EVERY item):**
+- [ ] **URL Pattern**: Follows organization-scoped pattern `/api/organizations/:orgId/...`
+- [ ] **Middleware**: `isAuthenticated` ALWAYS present as first middleware
+- [ ] **Middleware**: `checkOrganizationAccess` present for all org-scoped routes
+- [ ] **Params**: Extract `orgId` from `req.params` correctly
+- [ ] **Validation**: Use Zod schema `.parse()` for POST/PATCH requests
+- [ ] **Data Injection**: Add `organizationId` (and related IDs) to data before validation
+- [ ] **Error Handling**: Wrapped in try-catch block
+- [ ] **Error Codes**: Specific status codes (400 for validation, 500 for server errors)
+- [ ] **Error Messages**: User-friendly messages (not raw database errors)
+- [ ] **Success Response**: Return JSON with proper data structure
+- [ ] **HTTP Verbs**: GET (read), POST (create), PATCH (update), DELETE (delete)
+
+**Common Pitfalls to Avoid:**
+
+| ❌ Wrong | ✅ Correct |
+|---------|-----------|
+| `app.post("/api/...", async (req, res) => ...)` | `app.post("/api/...", isAuthenticated, checkOrganizationAccess, async (req, res) => ...)` |
+| `/api/resources` | `/api/organizations/:orgId/resources` |
+| `await storage.create(req.body)` | `const data = insertSchema.parse(req.body); await storage.create(data)` |
+| `res.status(500).json({ error })` | `res.status(500).json({ message: "Failed to create resource" })` |
+| `res.send("OK")` | `res.json({ success: true })` or `res.json(resource)` |
+
+---
+
+#### Phase 4: Frontend Implementation
+
+**Step 1: Create useQuery hook for fetching**
+```typescript
+const { data: resources = [], isLoading } = useQuery<Resource[]>({
+  queryKey: ["/api/organizations", orgId, "students", studentId, "resources"],
+  //         ↑ MUST match API route path structure exactly
+  queryFn: async () => {
+    const res = await fetch(`/api/organizations/${orgId}/students/${studentId}/resources`);
+    if (!res.ok) throw new Error("Failed to fetch resources");
+    return res.json();
+  },
+  enabled: !!orgId && !!studentId, // Only run when IDs are available
+});
+```
+
+**Step 2: Create useMutation hooks (with optimistic updates)**
+
+See "Adding a New Mutation" section above for the complete 5-handler pattern.
+
+**Query Key Convention (CRITICAL):**
+```typescript
+// Query key MUST mirror the API route structure
+["/api/organizations", orgId, "students", studentId, "resources"]
+//     ↓                  ↓       ↓         ↓          ↓
+// /api/organizations/:orgId/students/:studentId/resources
+```
+
+**Frontend Checklist:**
+- [ ] Query key matches API route path structure **exactly**
+- [ ] Mutation includes all 5 handlers (mutationFn, onMutate, onSuccess, onError, onSettled)
+- [ ] Optimistic updates implemented (see OPTIMISTIC_UI.md)
+- [ ] Error handling with user-friendly toast messages
+- [ ] Loading states shown during operations
+- [ ] Forms use react-hook-form with Zod validation
+
+---
+
+#### Complete Feature Verification Checklist
+
+**Before marking feature as complete, verify:**
+
+**Backend (routes.ts):**
+- [ ] All CRUD routes defined (GET, POST, PATCH, DELETE as needed)
+- [ ] Every route has `isAuthenticated` middleware
+- [ ] Every org-scoped route has `checkOrganizationAccess` middleware
+- [ ] POST/PATCH routes validate with Zod schema
+- [ ] Organization ID injected into data objects
+- [ ] Try-catch error handling on all routes
+- [ ] User-friendly error messages (not stack traces)
+- [ ] Proper HTTP status codes (200, 400, 403, 500)
+
+**Storage (storage.ts):**
+- [ ] Methods declared in IStorage interface
+- [ ] Methods implemented in DatabaseStorage class
+- [ ] All queries filter by organizationId
+- [ ] Proper ordering/sorting applied
+
+**Frontend:**
+- [ ] Query key matches route structure
+- [ ] All mutations have optimistic updates
+- [ ] Error handling with toast notifications
+- [ ] Loading states during operations
+- [ ] Forms validate with Zod schemas
+
+**Testing:**
+- [ ] Test routes with API client (Postman/Thunder Client/curl)
+- [ ] Verify authentication required (401 without auth)
+- [ ] Verify organization access control (403 for wrong org)
+- [ ] Test validation errors (400 with helpful messages)
+- [ ] Test foreign key constraint errors
+- [ ] Test all CRUD operations in UI
+- [ ] Test optimistic updates (instant feedback)
+- [ ] Test error rollback behavior
+
+---
+
+#### Quick Reference: Common Route Patterns
+
+| Pattern | Example Route | Use Case |
+|---------|--------------|----------|
+| Org-wide list | `GET /api/organizations/:orgId/students` | Fetch all students in organization |
+| Single resource | `GET /api/organizations/:orgId/students/:id` | Fetch one specific student |
+| Create org-level | `POST /api/organizations/:orgId/students` | Create new student in organization |
+| Create nested | `POST /api/organizations/:orgId/students/:studentId/resources` | Create resource for specific student |
+| Update resource | `PATCH /api/organizations/:orgId/students/:id` | Update existing student |
+| Delete resource | `DELETE /api/organizations/:orgId/students/:id` | Delete student |
+| Nested list | `GET /api/organizations/:orgId/students/:studentId/resources` | Fetch all resources for a student |
+
+---
+
+#### Debugging: When Routes Go Wrong
+
+**404 Error - Route not found**
+- [ ] Check route is registered in `server/routes.ts`
+- [ ] Verify URL pattern matches exactly (case-sensitive, check pluralization)
+- [ ] Check HTTP method matches (GET vs POST vs PATCH vs DELETE)
+- [ ] Ensure middleware order is correct (auth before handler)
+- [ ] **Restart the server** after adding new routes
+
+**403 Error - Forbidden**
+- [ ] Verify `checkOrganizationAccess` middleware is present
+- [ ] Check user belongs to the organization being accessed
+- [ ] Verify `orgId` in request matches user's organization
+
+**400 Error - Bad request**
+- [ ] Check Zod schema validation requirements
+- [ ] Verify all required fields are present in request body
+- [ ] Check data types match schema expectations
+- [ ] Look at error response for specific validation failures
+
+**500 Error - Server error**
+- [ ] Check server console logs for stack trace
+- [ ] Verify storage method exists and is implemented
+- [ ] Check database constraints (foreign keys, unique constraints)
+- [ ] Verify environment variables are set (DATABASE_URL, etc.)
+- [ ] Check for null/undefined values being passed to database
 
 ### Updating Existing Code Without Optimistic Updates
 

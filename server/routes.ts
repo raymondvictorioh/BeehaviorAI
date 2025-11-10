@@ -455,6 +455,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create behavior log at organization level (for organization-wide behavior logs page)
+  app.post("/api/organizations/:orgId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const log = await storage.createBehaviorLog({
+        organizationId: orgId,
+        studentId: req.body.studentId,
+        categoryId: req.body.categoryId,
+        notes: req.body.notes,
+        incidentDate: req.body.incidentDate ? new Date(req.body.incidentDate) : new Date(),
+        loggedBy: req.body.loggedBy || "Unknown",
+        strategies: req.body.strategies || null,
+      });
+      res.json(log);
+    } catch (error: any) {
+      console.error("Error creating behavior log:", error);
+
+      // Handle specific database errors
+      if (error.code === "23503") {
+        res.status(400).json({ message: "Invalid student or category ID" });
+      } else {
+        res.status(500).json({ message: "Failed to create behavior log", error: error.message });
+      }
+    }
+  });
+
   app.get("/api/organizations/:orgId/students/:studentId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, studentId } = req.params;
