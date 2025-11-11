@@ -12,6 +12,9 @@ import {
   subjects,
   academicLogCategories,
   academicLogs,
+  lists,
+  listItems,
+  listShares,
   type User,
   type UpsertUser,
   type Organization,
@@ -38,6 +41,12 @@ import {
   type InsertAcademicLogCategory,
   type AcademicLog,
   type InsertAcademicLog,
+  type List,
+  type InsertList,
+  type ListItem,
+  type InsertListItem,
+  type ListShare,
+  type InsertListShare,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, ne, sql } from "drizzle-orm";
@@ -132,6 +141,23 @@ export interface IStorage {
   createAcademicLog(log: InsertAcademicLog): Promise<AcademicLog>;
   updateAcademicLog(id: string, organizationId: string, log: Partial<InsertAcademicLog>): Promise<AcademicLog>;
   deleteAcademicLog(id: string, organizationId: string): Promise<void>;
+
+  // List operations
+  getLists(organizationId: string, userId: string): Promise<List[]>; // Returns lists user created or has access to
+  getList(id: string, organizationId: string, userId: string): Promise<List | undefined>;
+  createList(list: InsertList): Promise<List>;
+  updateList(id: string, organizationId: string, userId: string, list: Partial<InsertList>): Promise<List>;
+  deleteList(id: string, organizationId: string, userId: string): Promise<void>;
+
+  // List Item operations
+  getListItems(listId: string, organizationId: string, userId: string): Promise<ListItem[]>;
+  addListItem(item: InsertListItem, userId: string): Promise<ListItem>;
+  removeListItem(id: string, listId: string, organizationId: string, userId: string): Promise<void>;
+
+  // List Sharing operations
+  getListShares(listId: string, userId: string): Promise<ListShare[]>;
+  shareList(listId: string, sharedWithUserId: string, userId: string, organizationId: string): Promise<ListShare>;
+  unshareList(listId: string, sharedWithUserId: string, userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1094,6 +1120,183 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(academicLogs)
       .where(and(eq(academicLogs.id, id), eq(academicLogs.organizationId, organizationId)));
+  }
+
+  // ========================================
+  // List operations
+  // ========================================
+
+  async getLists(organizationId: string, userId: string): Promise<List[]> {
+    // Get lists created by user or shared with user
+    const createdLists = await db
+      .select()
+      .from(lists)
+      .where(and(eq(lists.organizationId, organizationId), eq(lists.createdBy, userId)));
+
+    const sharedListsData = await db
+      .select({ list: lists })
+      .from(listShares)
+      .innerJoin(lists, eq(listShares.listId, lists.id))
+      .where(and(eq(lists.organizationId, organizationId), eq(listShares.sharedWithUserId, userId)));
+
+    const sharedLists = sharedListsData.map((row) => row.list);
+
+    // Combine and deduplicate
+    const allLists = [...createdLists, ...sharedLists];
+    const uniqueLists = allLists.filter(
+      (list, index, self) => self.findIndex((l) => l.id === list.id) === index
+    );
+
+    return uniqueLists;
+  }
+
+  async getList(id: string, organizationId: string, userId: string): Promise<List | undefined> {
+    const [list] = await db
+      .select()
+      .from(lists)
+      .where(and(eq(lists.id, id), eq(lists.organizationId, organizationId)));
+
+    if (!list) return undefined;
+
+    // Check if user has access (creator or shared with)
+    const isCreator = list.createdBy === userId;
+    if (isCreator) return list;
+
+    const [shared] = await db
+      .select()
+      .from(listShares)
+      .where(and(eq(listShares.listId, id), eq(listShares.sharedWithUserId, userId)));
+
+    return shared ? list : undefined;
+  }
+
+  async createList(listData: InsertList): Promise<List> {
+    const [list] = await db.insert(lists).values(listData).returning();
+    return list;
+  }
+
+  async updateList(
+    id: string,
+    organizationId: string,
+    userId: string,
+    listData: Partial<InsertList>
+  ): Promise<List> {
+    // Only creator can update
+    const list = await this.getList(id, organizationId, userId);
+    if (!list || list.createdBy !== userId) {
+      throw new Error("Only list creator can update");
+    }
+
+    const [updated] = await db
+      .update(lists)
+      .set({ ...listData, updatedAt: new Date() })
+      .where(and(eq(lists.id, id), eq(lists.organizationId, organizationId)))
+      .returning();
+
+    return updated;
+  }
+
+  async deleteList(id: string, organizationId: string, userId: string): Promise<void> {
+    // Only creator can delete
+    const list = await this.getList(id, organizationId, userId);
+    if (!list || list.createdBy !== userId) {
+      throw new Error("Only list creator can delete");
+    }
+
+    await db
+      .delete(lists)
+      .where(and(eq(lists.id, id), eq(lists.organizationId, organizationId)));
+  }
+
+  // ========================================
+  // List Item operations
+  // ========================================
+
+  async getListItems(listId: string, organizationId: string, userId: string): Promise<ListItem[]> {
+    // Verify access to list
+    const list = await this.getList(listId, organizationId, userId);
+    if (!list) {
+      throw new Error("List not found or no access");
+    }
+
+    const items = await db.select().from(listItems).where(eq(listItems.listId, listId));
+
+    return items;
+  }
+
+  async addListItem(item: InsertListItem, userId: string): Promise<ListItem> {
+    // Note: Duplicate prevention is handled by unique constraints in database
+    const [newItem] = await db.insert(listItems).values(item).returning();
+    return newItem;
+  }
+
+  async removeListItem(
+    id: string,
+    listId: string,
+    organizationId: string,
+    userId: string
+  ): Promise<void> {
+    // Verify access to list
+    const list = await this.getList(listId, organizationId, userId);
+    if (!list) {
+      throw new Error("List not found or no access");
+    }
+
+    await db.delete(listItems).where(and(eq(listItems.id, id), eq(listItems.listId, listId)));
+  }
+
+  // ========================================
+  // List Sharing operations
+  // ========================================
+
+  async getListShares(listId: string, userId: string): Promise<ListShare[]> {
+    // Only creator can view shares
+    const [list] = await db.select().from(lists).where(eq(lists.id, listId));
+
+    if (!list || list.createdBy !== userId) {
+      throw new Error("Only list creator can view shares");
+    }
+
+    const shares = await db.select().from(listShares).where(eq(listShares.listId, listId));
+
+    return shares;
+  }
+
+  async shareList(
+    listId: string,
+    sharedWithUserId: string,
+    userId: string,
+    organizationId: string
+  ): Promise<ListShare> {
+    // Only creator can share
+    const list = await this.getList(listId, organizationId, userId);
+    if (!list || list.createdBy !== userId) {
+      throw new Error("Only list creator can share");
+    }
+
+    const [share] = await db
+      .insert(listShares)
+      .values({
+        listId,
+        sharedWithUserId,
+        sharedBy: userId,
+      })
+      .returning();
+
+    return share;
+  }
+
+  async unshareList(listId: string, sharedWithUserId: string, userId: string): Promise<void> {
+    // Only creator can unshare
+    const [list] = await db.select().from(lists).where(eq(lists.id, listId));
+
+    if (!list || list.createdBy !== userId) {
+      throw new Error("Only list creator can unshare");
+    }
+
+    await db
+      .delete(listShares)
+      .where(and(eq(listShares.listId, listId), eq(listShares.sharedWithUserId, sharedWithUserId)));
   }
 }
 

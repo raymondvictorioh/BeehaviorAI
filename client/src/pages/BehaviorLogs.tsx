@@ -307,6 +307,7 @@ export default function BehaviorLogs() {
         columns={columns}
         data={filteredByDateLogs}
         onRowClick={handleViewLog}
+        initialSorting={[{ id: "incidentDate", desc: true }]}
         toolbar={(table) => (
           <DataTableToolbar
             table={table}

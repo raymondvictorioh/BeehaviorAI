@@ -1,4 +1,4 @@
-import { GraduationCap, Home, Users, FileText, Settings, Moon, Sun, ClipboardList, BookOpen } from "lucide-react";
+import { GraduationCap, Home, Users, FileText, Settings, Moon, Sun, ClipboardList, BookOpen, List } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +37,11 @@ const menuItems = [
     title: "Academic Logs",
     url: "/academic-logs",
     icon: BookOpen,
+  },
+  {
+    title: "Lists",
+    url: "/lists",
+    icon: List,
   },
   {
     title: "Reports",
@@ -88,6 +93,11 @@ export function AppSidebar() {
       // Prefetch categories for settings
       queryClient.prefetchQuery({
         queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
+      });
+    } else if (url === "/lists") {
+      // Prefetch lists
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "lists"],
       });
     }
   };

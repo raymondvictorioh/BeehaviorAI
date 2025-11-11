@@ -290,3 +290,88 @@ export const insertAcademicLogSchema = createInsertSchema(academicLogs).omit({
 
 export type InsertAcademicLog = z.infer<typeof insertAcademicLogSchema>;
 export type AcademicLog = typeof academicLogs.$inferSelect;
+
+// Lists table - Custom lists for organizing students, behavior logs, academic logs
+export const lists = pgTable("lists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  type: varchar("type", { length: 50 }).notNull(), // "students", "behavior_logs", "academic_logs"
+  createdBy: varchar("created_by", { length: 255 }).notNull(), // User email/name who created
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertListSchema = createInsertSchema(lists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertList = z.infer<typeof insertListSchema>;
+export type List = typeof lists.$inferSelect;
+
+// List Items table - Junction table for list contents (polymorphic)
+export const listItems = pgTable(
+  "list_items",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    listId: varchar("list_id")
+      .notNull()
+      .references(() => lists.id, { onDelete: "cascade" }),
+
+    // Polymorphic references - only one should be populated based on list.type
+    studentId: varchar("student_id").references(() => students.id, { onDelete: "cascade" }),
+    behaviorLogId: varchar("behavior_log_id").references(() => behaviorLogs.id, { onDelete: "cascade" }),
+    academicLogId: varchar("academic_log_id").references(() => academicLogs.id, { onDelete: "cascade" }),
+
+    addedBy: varchar("added_by", { length: 255 }).notNull(), // User who added this item
+    addedAt: timestamp("added_at").defaultNow(),
+    notes: text("notes"), // Optional notes about why item is in list
+  },
+  (table) => [
+    // Unique constraints to prevent duplicates
+    uniqueIndex("unique_list_student").on(table.listId, table.studentId),
+    uniqueIndex("unique_list_behavior_log").on(table.listId, table.behaviorLogId),
+    uniqueIndex("unique_list_academic_log").on(table.listId, table.academicLogId),
+  ]
+);
+
+export const insertListItemSchema = createInsertSchema(listItems).omit({
+  id: true,
+  addedAt: true,
+});
+
+export type InsertListItem = z.infer<typeof insertListItemSchema>;
+export type ListItem = typeof listItems.$inferSelect;
+
+// List Shares table - Tracks who lists are shared with
+export const listShares = pgTable(
+  "list_shares",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    listId: varchar("list_id")
+      .notNull()
+      .references(() => lists.id, { onDelete: "cascade" }),
+    sharedWithUserId: varchar("shared_with_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sharedBy: varchar("shared_by", { length: 255 }).notNull(), // User who shared
+    sharedAt: timestamp("shared_at").defaultNow(),
+  },
+  (table) => [
+    // Prevent sharing with same user multiple times
+    uniqueIndex("unique_list_share").on(table.listId, table.sharedWithUserId),
+  ]
+);
+
+export const insertListShareSchema = createInsertSchema(listShares).omit({
+  id: true,
+  sharedAt: true,
+});
+
+export type InsertListShare = z.infer<typeof insertListShareSchema>;
+export type ListShare = typeof listShares.$inferSelect;

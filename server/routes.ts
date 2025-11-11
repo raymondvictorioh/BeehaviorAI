@@ -9,6 +9,9 @@ import {
   insertSubjectSchema,
   insertAcademicLogCategorySchema,
   insertAcademicLogSchema,
+  insertListSchema,
+  insertListItemSchema,
+  insertListShareSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -1331,6 +1334,262 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: errorMessage,
         message: error.message,
       });
+    }
+  });
+
+  // ========================================
+  // Lists routes
+  // ========================================
+
+  // Get all lists (created by user or shared with user)
+  app.get("/api/organizations/:orgId/lists", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const userId = getUserId(req);
+
+      const lists = await storage.getLists(orgId, userId);
+      res.json(lists);
+    } catch (error) {
+      console.error("Error fetching lists:", error);
+      res.status(500).json({ message: "Failed to fetch lists" });
+    }
+  });
+
+  // Create new list
+  app.post("/api/organizations/:orgId/lists", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const userId = getUserId(req);
+
+      const listData = {
+        ...req.body,
+        organizationId: orgId,
+        createdBy: userId,
+      };
+
+      const validatedData = insertListSchema.parse(listData);
+      const newList = await storage.createList(validatedData);
+
+      res.json(newList);
+    } catch (error: any) {
+      console.error("Error creating list:", error);
+
+      if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create list" });
+      }
+    }
+  });
+
+  // Get specific list with access check
+  app.get("/api/organizations/:orgId/lists/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const userId = getUserId(req);
+
+      const list = await storage.getList(id, orgId, userId);
+
+      if (!list) {
+        return res.status(404).json({ message: "List not found or no access" });
+      }
+
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching list:", error);
+      res.status(500).json({ message: "Failed to fetch list" });
+    }
+  });
+
+  // Update list
+  app.patch("/api/organizations/:orgId/lists/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const userId = getUserId(req);
+
+      const validatedData = insertListSchema.partial().parse(req.body);
+      const updatedList = await storage.updateList(id, orgId, userId, validatedData);
+
+      res.json(updatedList);
+    } catch (error: any) {
+      console.error("Error updating list:", error);
+
+      if (error.message === "Only list creator can update") {
+        res.status(403).json({ message: error.message });
+      } else if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to update list" });
+      }
+    }
+  });
+
+  // Delete list
+  app.delete("/api/organizations/:orgId/lists/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const userId = getUserId(req);
+
+      await storage.deleteList(id, orgId, userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting list:", error);
+
+      if (error.message === "Only list creator can delete") {
+        res.status(403).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to delete list" });
+      }
+    }
+  });
+
+  // ========================================
+  // List Items routes
+  // ========================================
+
+  // Get all items in a list
+  app.get("/api/organizations/:orgId/lists/:listId/items", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, listId } = req.params;
+      const userId = getUserId(req);
+
+      const items = await storage.getListItems(listId, orgId, userId);
+      res.json(items);
+    } catch (error: any) {
+      console.error("Error fetching list items:", error);
+
+      if (error.message === "List not found or no access") {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to fetch list items" });
+      }
+    }
+  });
+
+  // Add item to list
+  app.post("/api/organizations/:orgId/lists/:listId/items", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, listId } = req.params;
+      const userId = getUserId(req);
+
+      const itemData = {
+        ...req.body,
+        listId,
+        addedBy: userId,
+      };
+
+      const validatedData = insertListItemSchema.parse(itemData);
+      const newItem = await storage.addListItem(validatedData, userId);
+
+      res.json(newItem);
+    } catch (error: any) {
+      console.error("Error adding list item:", error);
+
+      if (error.code === "23505") {
+        // Unique constraint violation (duplicate)
+        res.status(400).json({ message: "This item is already in the list" });
+      } else if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to add item to list" });
+      }
+    }
+  });
+
+  // Remove item from list
+  app.delete("/api/organizations/:orgId/lists/:listId/items/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, listId, id } = req.params;
+      const userId = getUserId(req);
+
+      await storage.removeListItem(id, listId, orgId, userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error removing list item:", error);
+
+      if (error.message === "List not found or no access") {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to remove item from list" });
+      }
+    }
+  });
+
+  // ========================================
+  // List Sharing routes
+  // ========================================
+
+  // Get users list is shared with
+  app.get("/api/organizations/:orgId/lists/:listId/shares", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { listId } = req.params;
+      const userId = getUserId(req);
+
+      const shares = await storage.getListShares(listId, userId);
+      res.json(shares);
+    } catch (error: any) {
+      console.error("Error fetching list shares:", error);
+
+      if (error.message === "Only list creator can view shares") {
+        res.status(403).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to fetch list shares" });
+      }
+    }
+  });
+
+  // Share list with user
+  app.post("/api/organizations/:orgId/lists/:listId/shares", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, listId } = req.params;
+      const { sharedWithUserId } = req.body;
+      const userId = getUserId(req);
+
+      if (!sharedWithUserId) {
+        return res.status(400).json({ message: "sharedWithUserId is required" });
+      }
+
+      const shareData = {
+        listId,
+        sharedWithUserId,
+        sharedBy: userId,
+      };
+
+      const validatedData = insertListShareSchema.parse(shareData);
+      const newShare = await storage.shareList(listId, sharedWithUserId, userId, orgId);
+
+      res.json(newShare);
+    } catch (error: any) {
+      console.error("Error sharing list:", error);
+
+      if (error.message === "Only list creator can share") {
+        res.status(403).json({ message: error.message });
+      } else if (error.code === "23505") {
+        res.status(400).json({ message: "List already shared with this user" });
+      } else if (error.name === "ZodError") {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to share list" });
+      }
+    }
+  });
+
+  // Unshare list
+  app.delete("/api/organizations/:orgId/lists/:listId/shares/:userId", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { listId, userId: sharedWithUserId } = req.params;
+      const userId = getUserId(req);
+
+      await storage.unshareList(listId, sharedWithUserId, userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error unsharing list:", error);
+
+      if (error.message === "Only list creator can unshare") {
+        res.status(403).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to unshare list" });
+      }
     }
   });
 
