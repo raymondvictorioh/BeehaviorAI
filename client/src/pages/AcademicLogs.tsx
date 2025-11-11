@@ -357,6 +357,7 @@ export default function AcademicLogs() {
         columns={columns}
         data={filteredByDateLogs}
         onRowClick={handleViewLog}
+        initialSorting={[{ id: "assessmentDate", desc: true }]}
         toolbar={(table) => (
           <DataTableToolbar
             table={table}

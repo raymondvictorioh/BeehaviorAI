@@ -1,59 +1,16 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { Link } from "wouter";
 import { format } from "date-fns";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ClipboardList, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { DatePicker } from "@/components/ui/date-picker";
-import { X, ClipboardList, Plus } from "lucide-react";
 import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
+import { DataTable } from "@/components/ui/data-table";
+import { columns, type BehaviorLog } from "@/components/behavior-logs/columns";
+import { DataTableToolbar } from "@/components/behavior-logs/data-table-toolbar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
-type BehaviorLog = {
-  id: string;
-  organizationId: string;
-  studentId: string;
-  categoryId: string;
-  incidentDate: Date;
-  notes: string;
-  strategies: string | null;
-  loggedBy: string;
-  loggedAt: Date;
-  student?: {
-    id: string;
-    name: string;
-    email: string;
-    classId: string | null;
-  };
-  category?: {
-    id: string;
-    name: string;
-    color: string | null;
-  };
-  class?: {
-    id: string;
-    name: string;
-  } | null;
-};
 
 type BehaviorLogCategory = {
   id: string;
@@ -76,9 +33,7 @@ export default function BehaviorLogs() {
   const { toast } = useToast();
   const orgId = user?.organizations?.[0]?.id;
 
-  // Filter states
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+  // Date filter states (for custom date range filtering)
   const [fromDate, setFromDate] = useState<Date | undefined>();
   const [toDate, setToDate] = useState<Date | undefined>();
 
@@ -270,77 +225,24 @@ export default function BehaviorLogs() {
     },
   });
 
-  // Apply filters
-  const filteredLogs = useMemo(() => {
-    return behaviorLogs.filter((log) => {
-      // Category filter
-      if (selectedCategories.length > 0 && !selectedCategories.includes(log.categoryId)) {
+  // Apply date range filter to data
+  const filteredByDateLogs = behaviorLogs.filter((log) => {
+    const incidentDate = new Date(log.incidentDate);
+
+    if (fromDate && incidentDate < fromDate) {
+      return false;
+    }
+
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      if (incidentDate > endOfDay) {
         return false;
       }
+    }
 
-      // Class filter
-      if (selectedClasses.length > 0) {
-        const classId = log.student?.classId;
-        if (!classId || !selectedClasses.includes(classId)) {
-          return false;
-        }
-      }
-
-      // Date range filter
-      const incidentDate = new Date(log.incidentDate);
-      if (fromDate && incidentDate < fromDate) {
-        return false;
-      }
-      if (toDate) {
-        const endOfDay = new Date(toDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        if (incidentDate > endOfDay) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [behaviorLogs, selectedCategories, selectedClasses, fromDate, toDate]);
-
-  // Clear all filters
-  const clearFilters = () => {
-    setSelectedCategories([]);
-    setSelectedClasses([]);
-    setFromDate(undefined);
-    setToDate(undefined);
-  };
-
-  const hasActiveFilters = selectedCategories.length > 0 ||
-    selectedClasses.length > 0 ||
-    fromDate !== undefined ||
-    toDate !== undefined;
-
-  const getCategoryColor = (categoryId: string) => {
-    const category = categories.find((c) => c.id === categoryId);
-    return category?.color || "gray";
-  };
-
-  const getCategoryName = (categoryId: string) => {
-    const category = categories.find((c) => c.id === categoryId);
-    return category?.name || "Unknown";
-  };
-
-  const toggleCategory = (categoryId: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(categoryId)
-        ? prev.filter((id) => id !== categoryId)
-        : [...prev, categoryId]
-    );
-  };
-
-  const toggleClass = (classId: string) => {
-    setSelectedClasses((prev) =>
-      prev.includes(classId)
-        ? prev.filter((id) => id !== classId)
-        : [...prev, classId]
-    );
-  };
+    return true;
+  });
 
   // Behavior log handlers
   const handleViewLog = (log: BehaviorLog) => {
@@ -384,183 +286,39 @@ export default function BehaviorLogs() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <div className="flex items-center justify-between mb-2">
+    <div className="flex h-full flex-1 flex-col space-y-8 p-8">
+      <div className="flex items-center justify-between space-y-2">
+        <div>
           <div className="flex items-center gap-2">
             <ClipboardList className="h-6 w-6 text-primary" />
-            <h1 className="text-3xl font-bold">Behavior Logs</h1>
+            <h2 className="text-2xl font-bold tracking-tight">Behavior Logs</h2>
           </div>
-          <Button onClick={() => setIsAddLogDialogOpen(true)} data-testid="button-new-log">
-            <Plus className="h-4 w-4 mr-2" />
-            New Log
-          </Button>
+          <p className="text-muted-foreground">
+            View and manage all behavior logs across your organization
+          </p>
         </div>
-        <p className="text-muted-foreground">
-          View and filter all behavior logs across your organization
-        </p>
+        <Button onClick={() => setIsAddLogDialogOpen(true)} data-testid="button-new-log">
+          <Plus className="mr-2 h-4 w-4" />
+          New Behavior Log
+        </Button>
       </div>
 
-      {/* Filters Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Filters</CardTitle>
-              <CardDescription>Filter behavior logs by category, class, or date range</CardDescription>
-            </div>
-            {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-2" />
-                Clear Filters
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Category Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Categories</label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map((category) => (
-                  <Badge
-                    key={category.id}
-                    variant={selectedCategories.includes(category.id) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => toggleCategory(category.id)}
-                  >
-                    {category.name}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Class Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Classes</label>
-              <div className="flex flex-wrap gap-2">
-                {classes.map((cls) => (
-                  <Badge
-                    key={cls.id}
-                    variant={selectedClasses.includes(cls.id) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => toggleClass(cls.id)}
-                  >
-                    {cls.name}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* From Date */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">From Date</label>
-              <DatePicker
-                date={fromDate}
-                onDateChange={setFromDate}
-                placeholder="Select start date"
-              />
-            </div>
-
-            {/* To Date */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">To Date</label>
-              <DatePicker
-                date={toDate}
-                onDateChange={setToDate}
-                placeholder="Select end date"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Results Summary */}
-      <div className="text-sm text-muted-foreground">
-        Showing {filteredLogs.length} of {behaviorLogs.length} behavior logs
-      </div>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          {filteredLogs.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
-              <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">No behavior logs found</p>
-              <p className="text-sm">
-                {hasActiveFilters
-                  ? "Try adjusting your filters"
-                  : "There are no behavior logs in your organization yet"}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead>Notes</TableHead>
-                    <TableHead>Logged By</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredLogs.map((log) => (
-                    <TableRow
-                      key={log.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleViewLog(log)}
-                    >
-                      <TableCell className="whitespace-nowrap">
-                        {format(new Date(log.incidentDate), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell>
-                        {log.student ? (
-                          <Link
-                            href={`/students/${log.studentId}`}
-                            className="text-primary hover:underline"
-                          >
-                            {log.student.name}
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">Unknown</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          style={{
-                            borderColor: `var(--${getCategoryColor(log.categoryId)})`,
-                            color: `var(--${getCategoryColor(log.categoryId)})`,
-                          }}
-                        >
-                          {getCategoryName(log.categoryId)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {log.class?.name || log.student?.classId ? (
-                          log.class?.name || "Unknown Class"
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-md">
-                        <div className="truncate" title={log.notes}>
-                          {log.notes}
-                        </div>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">{log.loggedBy}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={filteredByDateLogs}
+        onRowClick={handleViewLog}
+        toolbar={(table) => (
+          <DataTableToolbar
+            table={table}
+            categories={categories}
+            classes={classes}
+            fromDate={fromDate}
+            toDate={toDate}
+            onFromDateChange={setFromDate}
+            onToDateChange={setToDate}
+          />
+        )}
+      />
 
       {/* Behavior Log Details Sheet */}
       <BehaviorLogDetailsSheet
