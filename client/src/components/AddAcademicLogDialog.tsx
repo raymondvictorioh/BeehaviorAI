@@ -24,6 +24,7 @@ interface AddAcademicLogDialogProps {
   onOpenChange: (open: boolean) => void;
   onSubmit?: (data: {
     date: string;
+    studentId?: string;
     subjectId: string;
     categoryId: string;
     grade?: string;
@@ -32,6 +33,7 @@ interface AddAcademicLogDialogProps {
   }) => void;
   subjects?: Array<{ id: string; name: string; isArchived?: boolean }>;
   categories?: Array<{ id: string; name: string; color?: string | null }>;
+  students?: Array<{ id: string; name: string }>; // Optional: for organization-wide view
 }
 
 const getTodayDate = () => {
@@ -45,8 +47,10 @@ export function AddAcademicLogDialog({
   onSubmit,
   subjects = [],
   categories = [],
+  students = [],
 }: AddAcademicLogDialogProps) {
   const [date, setDate] = useState(getTodayDate());
+  const [studentId, setStudentId] = useState("");
   const [subjectId, setSubjectId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [grade, setGrade] = useState("");
@@ -56,18 +60,31 @@ export function AddAcademicLogDialog({
   // Filter out archived subjects
   const activeSubjects = subjects.filter((s) => !s.isArchived);
 
+  // Show student selector only when students array is provided (organization-wide view)
+  const showStudentSelector = students.length > 0;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Submitting academic log:", { date, subjectId, categoryId, grade, score, notes });
-    onSubmit?.({
+
+    const submitData: any = {
       date,
       subjectId,
       categoryId,
       grade: grade || undefined,
       score: score || undefined,
       notes,
-    });
+    };
+
+    // Include studentId only if student selector is shown
+    if (showStudentSelector) {
+      submitData.studentId = studentId;
+    }
+
+    onSubmit?.(submitData);
+
+    // Reset form
     setDate(getTodayDate());
+    setStudentId("");
     setSubjectId("");
     setCategoryId("");
     setGrade("");
@@ -87,6 +104,25 @@ export function AddAcademicLogDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
+            {/* Student selector - only show for organization-wide view */}
+            {showStudentSelector && (
+              <div className="space-y-2">
+                <Label htmlFor="student">Student *</Label>
+                <Select value={studentId} onValueChange={setStudentId} required>
+                  <SelectTrigger id="student" data-testid="select-student">
+                    <SelectValue placeholder="Select a student" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {students.map((student) => (
+                      <SelectItem key={student.id} value={student.id}>
+                        {student.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date">Assessment Date *</Label>

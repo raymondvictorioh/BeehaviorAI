@@ -1,59 +1,15 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { Link } from "wouter";
 import { format } from "date-fns";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { DatePicker } from "@/components/ui/date-picker";
-import { X, BookOpen, Plus } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { AcademicLogDetailsSheet } from "@/components/AcademicLogDetailsSheet";
 import { AddAcademicLogDialog } from "@/components/AddAcademicLogDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
-type AcademicLog = {
-  id: string;
-  organizationId: string;
-  studentId: string;
-  subjectId: string;
-  categoryId: string;
-  assessmentDate: Date;
-  grade: string | null;
-  score: string | null;
-  notes: string;
-  loggedBy: string;
-  loggedAt: Date;
-  student?: {
-    id: string;
-    name: string;
-    email: string;
-    classId: string | null;
-  };
-  subject?: {
-    id: string;
-    name: string;
-    code: string | null;
-  };
-  category?: {
-    id: string;
-    name: string;
-    color: string | null;
-  };
-  class?: {
-    id: string;
-    name: string;
-  } | null;
-};
+import { DataTable } from "@/components/ui/data-table";
+import { columns, type AcademicLog } from "@/components/academic-logs/columns";
+import { DataTableToolbar } from "@/components/academic-logs/data-table-toolbar";
 
 type AcademicCategory = {
   id: string;
@@ -83,10 +39,7 @@ export default function AcademicLogs() {
   const { toast } = useToast();
   const orgId = user?.organizations?.[0]?.id;
 
-  // Filter states
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+  // Date filter states (for custom date range filtering)
   const [fromDate, setFromDate] = useState<Date | undefined>();
   const [toDate, setToDate] = useState<Date | undefined>();
 
@@ -301,97 +254,24 @@ export default function AcademicLogs() {
     },
   });
 
-  // Apply filters
-  const filteredLogs = useMemo(() => {
-    return academicLogs.filter((log) => {
-      // Subject filter
-      if (selectedSubjects.length > 0 && !selectedSubjects.includes(log.subjectId)) {
+  // Apply date range filter to data
+  const filteredByDateLogs = academicLogs.filter((log) => {
+    const assessmentDate = new Date(log.assessmentDate);
+
+    if (fromDate && assessmentDate < fromDate) {
+      return false;
+    }
+
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      if (assessmentDate > endOfDay) {
         return false;
       }
+    }
 
-      // Category filter
-      if (selectedCategories.length > 0 && !selectedCategories.includes(log.categoryId)) {
-        return false;
-      }
-
-      // Class filter
-      if (selectedClasses.length > 0) {
-        const classId = log.student?.classId;
-        if (!classId || !selectedClasses.includes(classId)) {
-          return false;
-        }
-      }
-
-      // Date range filter
-      const assessmentDate = new Date(log.assessmentDate);
-      if (fromDate && assessmentDate < fromDate) {
-        return false;
-      }
-      if (toDate) {
-        const endOfDay = new Date(toDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        if (assessmentDate > endOfDay) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [academicLogs, selectedSubjects, selectedCategories, selectedClasses, fromDate, toDate]);
-
-  // Clear all filters
-  const clearFilters = () => {
-    setSelectedSubjects([]);
-    setSelectedCategories([]);
-    setSelectedClasses([]);
-    setFromDate(undefined);
-    setToDate(undefined);
-  };
-
-  const hasActiveFilters = selectedSubjects.length > 0 ||
-    selectedCategories.length > 0 ||
-    selectedClasses.length > 0 ||
-    fromDate !== undefined ||
-    toDate !== undefined;
-
-  const getCategoryColor = (categoryId: string) => {
-    const category = categories.find((c) => c.id === categoryId);
-    return category?.color || "gray";
-  };
-
-  const getCategoryName = (categoryId: string) => {
-    const category = categories.find((c) => c.id === categoryId);
-    return category?.name || "Unknown";
-  };
-
-  const getSubjectName = (subjectId: string) => {
-    const subject = subjects.find((s) => s.id === subjectId);
-    return subject?.name || "Unknown";
-  };
-
-  const toggleSubject = (subjectId: string) => {
-    setSelectedSubjects((prev) =>
-      prev.includes(subjectId)
-        ? prev.filter((id) => id !== subjectId)
-        : [...prev, subjectId]
-    );
-  };
-
-  const toggleCategory = (categoryId: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(categoryId)
-        ? prev.filter((id) => id !== categoryId)
-        : [...prev, categoryId]
-    );
-  };
-
-  const toggleClass = (classId: string) => {
-    setSelectedClasses((prev) =>
-      prev.includes(classId)
-        ? prev.filter((id) => id !== classId)
-        : [...prev, classId]
-    );
-  };
+    return true;
+  });
 
   // Academic log handlers
   const handleViewLog = (log: AcademicLog) => {
@@ -429,7 +309,16 @@ export default function AcademicLogs() {
   };
 
   const handleCreateLog = (data: any) => {
-    createAcademicLog.mutate(data);
+    // Map the form data to the API format
+    createAcademicLog.mutate({
+      studentId: data.studentId,
+      subjectId: data.subjectId,
+      categoryId: data.categoryId,
+      assessmentDate: data.date, // Map 'date' to 'assessmentDate'
+      grade: data.grade,
+      score: data.score,
+      notes: data.notes,
+    });
   };
 
   if (logsLoading) {
@@ -446,210 +335,37 @@ export default function AcademicLogs() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <div className="flex items-center justify-between mb-2">
+    <div className="flex h-full flex-1 flex-col space-y-8 p-8">
+      <div className="flex items-center justify-between space-y-2">
+        <div>
           <div className="flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-primary" />
-            <h1 className="text-3xl font-bold">Academic Logs</h1>
+            <h2 className="text-2xl font-bold tracking-tight">Academic Logs</h2>
           </div>
-          <Button onClick={() => setIsAddLogDialogOpen(true)} data-testid="button-new-academic-log">
-            <Plus className="h-4 w-4 mr-2" />
-            New Academic Log
-          </Button>
+          <p className="text-muted-foreground">
+            View and manage all academic logs across your organization
+          </p>
         </div>
-        <p className="text-muted-foreground">
-          View and filter all academic logs across your organization
-        </p>
       </div>
 
-      {/* Filters Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Filters</CardTitle>
-              <CardDescription>Filter academic logs by subject, category, class, or date range</CardDescription>
-            </div>
-            {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-2" />
-                Clear Filters
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Subject Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Subjects</label>
-              <div className="flex flex-wrap gap-2">
-                {subjects.filter(s => !s.isArchived).map((subject) => (
-                  <Badge
-                    key={subject.id}
-                    variant={selectedSubjects.includes(subject.id) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => toggleSubject(subject.id)}
-                  >
-                    {subject.name}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Category Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Categories</label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map((category) => (
-                  <Badge
-                    key={category.id}
-                    variant={selectedCategories.includes(category.id) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => toggleCategory(category.id)}
-                  >
-                    {category.name}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Class Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Classes</label>
-              <div className="flex flex-wrap gap-2">
-                {classes.map((cls) => (
-                  <Badge
-                    key={cls.id}
-                    variant={selectedClasses.includes(cls.id) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => toggleClass(cls.id)}
-                  >
-                    {cls.name}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Date Range Filters */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Date Range</label>
-              <div className="space-y-2">
-                <DatePicker
-                  date={fromDate}
-                  onDateChange={setFromDate}
-                  placeholder="From date"
-                />
-                <DatePicker
-                  date={toDate}
-                  onDateChange={setToDate}
-                  placeholder="To date"
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Results Summary */}
-      <div className="text-sm text-muted-foreground">
-        Showing {filteredLogs.length} of {academicLogs.length} academic logs
-      </div>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          {filteredLogs.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
-              <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">No academic logs found</p>
-              <p className="text-sm">
-                {hasActiveFilters
-                  ? "Try adjusting your filters"
-                  : "There are no academic logs in your organization yet"}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead>Score</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead>Notes</TableHead>
-                    <TableHead>Logged By</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredLogs.map((log) => (
-                    <TableRow
-                      key={log.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleViewLog(log)}
-                    >
-                      <TableCell className="whitespace-nowrap">
-                        {format(new Date(log.assessmentDate), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell>
-                        {log.student ? (
-                          <Link
-                            href={`/students/${log.studentId}`}
-                            className="text-primary hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {log.student.name}
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">Unknown</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-medium">{getSubjectName(log.subjectId)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          style={{
-                            borderColor: `var(--${getCategoryColor(log.categoryId)})`,
-                            color: `var(--${getCategoryColor(log.categoryId)})`,
-                          }}
-                        >
-                          {getCategoryName(log.categoryId)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {log.grade || <span className="text-muted-foreground">-</span>}
-                      </TableCell>
-                      <TableCell>
-                        {log.score || <span className="text-muted-foreground">-</span>}
-                      </TableCell>
-                      <TableCell>
-                        {log.class?.name || log.student?.classId ? (
-                          log.class?.name || "Unknown Class"
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-md">
-                        <div className="truncate" title={log.notes}>
-                          {log.notes}
-                        </div>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">{log.loggedBy}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={filteredByDateLogs}
+        onRowClick={handleViewLog}
+        toolbar={(table) => (
+          <DataTableToolbar
+            table={table}
+            subjects={subjects}
+            categories={categories}
+            classes={classes}
+            onNewLog={() => setIsAddLogDialogOpen(true)}
+            fromDate={fromDate}
+            toDate={toDate}
+            onFromDateChange={setFromDate}
+            onToDateChange={setToDate}
+          />
+        )}
+      />
 
       {/* Academic Log Details Sheet */}
       <AcademicLogDetailsSheet

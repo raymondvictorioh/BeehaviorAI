@@ -32,12 +32,8 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       StarterKit,
-      TaskList.configure({
-        nested: true,
-      }),
-      TaskItem.configure({
-        nested: true,
-      }),
+      TaskList,
+      TaskItem,
     ],
     content,
     editorProps: {
@@ -53,7 +49,7 @@ export function RichTextEditor({
   // Update editor content when content prop changes (e.g., when editing)
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content, false); // false = don't add to history
+      editor.commands.setContent(content, { emitUpdate: false }); // don't add to history
     }
   }, [content, editor]);
 

@@ -11,6 +11,10 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  HeaderGroup,
+  Header,
+  Row,
+  Cell,
 } from "@tanstack/react-table";
 import { useState } from "react";
 
@@ -74,9 +78,9 @@ export function DataTable<TData, TValue>({
       <div className="rounded-md border">
         <Table>
           <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
+            {table.getHeaderGroups().map((headerGroup: HeaderGroup<TData>) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
+                {headerGroup.headers.map((header: Header<TData, TValue>) => {
                   return (
                     <TableHead key={header.id}>
                       {header.isPlaceholder
@@ -93,14 +97,14 @@ export function DataTable<TData, TValue>({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row: Row<TData>) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                   className={onRowClick ? "cursor-pointer hover:bg-muted/50" : ""}
                   onClick={() => onRowClick && onRowClick(row.original)}
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getVisibleCells().map((cell: Cell<TData, TValue>) => (
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,

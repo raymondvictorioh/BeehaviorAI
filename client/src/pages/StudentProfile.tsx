@@ -502,7 +502,6 @@ export default function StudentProfile() {
         id: tempId,
         organizationId: orgId!,
         studentId: studentId!,
-        title: newNote.title || "Untitled meeting",
         date: newNote.date ? new Date(newNote.date) : new Date(),
         participants: newNote.participants || [],
         summary: newNote.title || "Untitled meeting",
