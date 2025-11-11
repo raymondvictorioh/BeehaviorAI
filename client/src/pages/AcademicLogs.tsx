@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Plus } from "lucide-react";
 import { AcademicLogDetailsSheet } from "@/components/AcademicLogDetailsSheet";
 import { AddAcademicLogDialog } from "@/components/AddAcademicLogDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { columns, type AcademicLog } from "@/components/academic-logs/columns";
 import { DataTableToolbar } from "@/components/academic-logs/data-table-toolbar";
@@ -346,6 +347,10 @@ export default function AcademicLogs() {
             View and manage all academic logs across your organization
           </p>
         </div>
+        <Button onClick={() => setIsAddLogDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Academic Log
+        </Button>
       </div>
 
       <DataTable
@@ -358,7 +363,6 @@ export default function AcademicLogs() {
             subjects={subjects}
             categories={categories}
             classes={classes}
-            onNewLog={() => setIsAddLogDialogOpen(true)}
             fromDate={fromDate}
             toDate={toDate}
             onFromDateChange={setFromDate}
