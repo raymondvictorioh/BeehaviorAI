@@ -74,7 +74,7 @@ export default function Students() {
             Students
           </h1>
           <p className="text-muted-foreground">
-            Manage student profiles and behavior records
+            Manage student! profiles and behavior records
           </p>
         </div>
         <Button onClick={() => setIsAddDialogOpen(true)} data-testid="button-add-student">
