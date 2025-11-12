@@ -22,7 +22,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, Edit, Trash2, Save, Clock, User } from "lucide-react";
-import { format } from "date-fns";
+import { getLegacyBehaviorColor } from "@/lib/utils/colorUtils";
+import { formatDateTime, formatDateOnly } from "@/lib/utils/dateUtils";
 
 interface BehaviorLogDetailsSheetProps {
   open: boolean;
@@ -40,13 +41,6 @@ interface BehaviorLogDetailsSheetProps {
   onUpdateStrategies?: (id: string, strategies: string) => void;
   onDelete?: (id: string) => void;
 }
-
-const categoryColors: Record<string, string> = {
-  positive: "bg-green-500",
-  neutral: "bg-blue-500",
-  concern: "bg-amber-500",
-  serious: "bg-red-500",
-};
 
 export function BehaviorLogDetailsSheet({
   open,
@@ -72,7 +66,7 @@ export function BehaviorLogDetailsSheet({
 
   if (!log) return null;
 
-  const categoryColor = categoryColors[log.category.toLowerCase()] || "bg-gray-500";
+  const categoryColor = getLegacyBehaviorColor(log.category.toLowerCase());
 
   const handleSaveNotes = () => {
     console.log("Saving incident notes:", notes);
@@ -91,15 +85,6 @@ export function BehaviorLogDetailsSheet({
     onDelete?.(log.id);
     setShowDeleteDialog(false);
     onOpenChange(false);
-  };
-
-  // Format dates consistently as dd-MM-yyyy with time
-  const formatDateTime = (date: string | Date) => {
-    return format(new Date(date), "dd-MM-yyyy 'at' h:mm a");
-  };
-
-  const formatDate = (date: string | Date) => {
-    return format(new Date(date), "dd-MM-yyyy");
   };
 
   return (

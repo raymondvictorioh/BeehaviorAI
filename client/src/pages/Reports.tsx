@@ -1,18 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, FileText } from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 export default function Reports() {
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold mb-2" data-testid="text-page-title">
-          Reports
-        </h1>
-        <p className="text-muted-foreground">
-          Generate and download behavior reports
-        </p>
-      </div>
+      <PageHeader
+        title="Reports"
+        description="Generate and download behavior reports"
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="hover-elevate cursor-pointer" data-testid="card-report-student">

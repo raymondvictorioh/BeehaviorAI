@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, FileText, TrendingUp, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 interface DashboardStats {
   totalStudents: number;
@@ -77,14 +78,10 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold mb-2" data-testid="text-page-title">
-          Dashboard
-        </h1>
-        <p className="text-muted-foreground">
-          Overview of student behavior management activities
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Overview of student behavior management activities"
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {statsCards.map((stat, i) => (

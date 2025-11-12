@@ -11,6 +11,34 @@ import { columns, type BehaviorLog } from "@/components/behavior-logs/columns";
 import { DataTableToolbar } from "@/components/behavior-logs/data-table-toolbar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/shared/PageHeader";
+
+type BehaviorLog = {
+  id: string;
+  organizationId: string;
+  studentId: string;
+  categoryId: string;
+  incidentDate: Date;
+  notes: string;
+  strategies: string | null;
+  loggedBy: string;
+  loggedAt: Date;
+  student?: {
+    id: string;
+    name: string;
+    email: string;
+    classId: string | null;
+  };
+  category?: {
+    id: string;
+    name: string;
+    color: string | null;
+  };
+  class?: {
+    id: string;
+    name: string;
+  } | null;
+};
 
 type BehaviorLogCategory = {
   id: string;
@@ -286,21 +314,96 @@ export default function BehaviorLogs() {
   }
 
   return (
-    <div className="flex h-full flex-1 flex-col space-y-8 p-8">
-      <div className="flex items-center justify-between space-y-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <ClipboardList className="h-6 w-6 text-primary" />
-            <h2 className="text-2xl font-bold tracking-tight">Behavior Logs</h2>
+    <div className="p-6 space-y-6">
+      <PageHeader
+        title="Behavior Logs"
+        description="View and filter all behavior logs across your organization"
+        action={
+          <Button onClick={() => setIsAddLogDialogOpen(true)} data-testid="button-new-log">
+            <Plus className="h-4 w-4 mr-2" />
+            New Log
+          </Button>
+        }
+      />
+
+      {/* Filters Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Filters</CardTitle>
+              <CardDescription>Filter behavior logs by category, class, or date range</CardDescription>
+            </div>
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                <X className="h-4 w-4 mr-2" />
+                Clear Filters
+              </Button>
+            )}
           </div>
-          <p className="text-muted-foreground">
-            View and manage all behavior logs across your organization
-          </p>
-        </div>
-        <Button onClick={() => setIsAddLogDialogOpen(true)} data-testid="button-new-log">
-          <Plus className="mr-2 h-4 w-4" />
-          New Behavior Log
-        </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Category Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Categories</label>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((category) => (
+                  <Badge
+                    key={category.id}
+                    variant={selectedCategories.includes(category.id) ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => toggleCategory(category.id)}
+                  >
+                    {category.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* Class Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Classes</label>
+              <div className="flex flex-wrap gap-2">
+                {classes.map((cls) => (
+                  <Badge
+                    key={cls.id}
+                    variant={selectedClasses.includes(cls.id) ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => toggleClass(cls.id)}
+                  >
+                    {cls.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* From Date */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">From Date</label>
+              <DatePicker
+                date={fromDate}
+                onDateChange={setFromDate}
+                placeholder="Select start date"
+              />
+            </div>
+
+            {/* To Date */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">To Date</label>
+              <DatePicker
+                date={toDate}
+                onDateChange={setToDate}
+                placeholder="Select end date"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Results Summary */}
+      <div className="text-sm text-muted-foreground">
+        Showing {filteredLogs.length} of {behaviorLogs.length} behavior logs
       </div>
 
       <DataTable
