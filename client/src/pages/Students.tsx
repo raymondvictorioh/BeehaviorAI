@@ -2,13 +2,14 @@ import { useState, useMemo } from "react";
 import { StudentCard } from "@/components/StudentCard";
 import { AddStudentDialog } from "@/components/AddStudentDialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import type { Student, Class } from "@shared/schema";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { SearchInput } from "@/components/shared/SearchInput";
 
 // Skeleton loader for students page
 function StudentsSkeleton() {
@@ -68,31 +69,23 @@ export default function Students() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-semibold mb-2" data-testid="text-page-title">
-            Students
-          </h1>
-          <p className="text-muted-foreground">
-            Manage student! profiles and behavior records
-          </p>
-        </div>
-        <Button onClick={() => setIsAddDialogOpen(true)} data-testid="button-add-student">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Student
-        </Button>
-      </div>
+      <PageHeader
+        title="Students"
+        description="Manage student profiles and behavior records"
+        action={
+          <Button onClick={() => setIsAddDialogOpen(true)} data-testid="button-add-student">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Student
+          </Button>
+        }
+      />
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search students..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-          data-testid="input-search-students"
-        />
-      </div>
+      <SearchInput
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search students..."
+        testId="input-search-students"
+      />
 
       {filteredStudents.length === 0 && searchQuery === "" ? (
         <div className="text-center py-12">

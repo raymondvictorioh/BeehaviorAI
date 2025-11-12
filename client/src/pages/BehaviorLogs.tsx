@@ -27,6 +27,7 @@ import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 type BehaviorLog = {
   id: string;
@@ -385,21 +386,16 @@ export default function BehaviorLogs() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="h-6 w-6 text-primary" />
-            <h1 className="text-3xl font-bold">Behavior Logs</h1>
-          </div>
+      <PageHeader
+        title="Behavior Logs"
+        description="View and filter all behavior logs across your organization"
+        action={
           <Button onClick={() => setIsAddLogDialogOpen(true)} data-testid="button-new-log">
             <Plus className="h-4 w-4 mr-2" />
             New Log
           </Button>
-        </div>
-        <p className="text-muted-foreground">
-          View and filter all behavior logs across your organization
-        </p>
-      </div>
+        }
+      />
 
       {/* Filters Section */}
       <Card>

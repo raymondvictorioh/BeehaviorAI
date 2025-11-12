@@ -16,7 +16,9 @@ import { ClassDialog } from "@/components/ClassDialog";
 import { SubjectDialog } from "@/components/SubjectDialog";
 import { AcademicCategoryDialog } from "@/components/AcademicCategoryDialog";
 import type { BehaviorLogCategory, User, Class, Subject, AcademicLogCategory } from "@shared/schema";
+import { getColorClass } from "@/lib/utils/colorUtils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { PageHeader } from "@/components/shared/PageHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,21 +38,6 @@ interface OrganizationUser {
   joinedAt: Date | string | null;
   user: User;
 }
-
-const getColorClass = (color: string | null | undefined): string => {
-  const colorMap: Record<string, string> = {
-    green: "bg-green-500",
-    blue: "bg-blue-500",
-    amber: "bg-amber-500",
-    red: "bg-red-500",
-    purple: "bg-purple-500",
-    pink: "bg-pink-500",
-    orange: "bg-orange-500",
-    teal: "bg-teal-500",
-    indigo: "bg-indigo-500",
-  };
-  return color ? colorMap[color] || "bg-gray-500" : "bg-gray-500";
-};
 
 export default function Settings() {
   const { user } = useAuth();
@@ -856,14 +843,10 @@ export default function Settings() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold mb-2" data-testid="text-page-title">
-          Settings
-        </h1>
-        <p className="text-muted-foreground">
-          Configure your school's preferences and settings
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Configure your school's preferences and settings"
+      />
 
       <Tabs defaultValue="organization" className="w-full">
         <TabsList className="grid w-full grid-cols-7 max-w-4xl">

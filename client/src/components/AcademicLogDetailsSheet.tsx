@@ -23,7 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, Edit, Trash2, Save, Clock, User, BookOpen, Award } from "lucide-react";
-import { format } from "date-fns";
+import { getColorClass } from "@/lib/utils/colorUtils";
+import { formatDateTime, formatDateOnly } from "@/lib/utils/dateUtils";
 
 interface AcademicLogDetailsSheetProps {
   open: boolean;
@@ -45,21 +46,6 @@ interface AcademicLogDetailsSheetProps {
   onUpdateNotes?: (id: string, notes: string) => void;
   onDelete?: (id: string) => void;
 }
-
-const getColorClass = (color: string | null | undefined): string => {
-  const colorMap: Record<string, string> = {
-    green: "bg-green-500",
-    blue: "bg-blue-500",
-    amber: "bg-amber-500",
-    orange: "bg-orange-500",
-    red: "bg-red-500",
-    purple: "bg-purple-500",
-    pink: "bg-pink-500",
-    teal: "bg-teal-500",
-    indigo: "bg-indigo-500",
-  };
-  return color ? colorMap[color] || "bg-gray-500" : "bg-gray-500";
-};
 
 export function AcademicLogDetailsSheet({
   open,
@@ -114,15 +100,6 @@ export function AcademicLogDetailsSheet({
     onDelete?.(log.id);
     setShowDeleteDialog(false);
     onOpenChange(false);
-  };
-
-  // Format dates consistently as dd-MM-yyyy with time
-  const formatDateTime = (date: string | Date) => {
-    return format(new Date(date), "dd-MM-yyyy 'at' h:mm a");
-  };
-
-  const formatDate = (date: string | Date) => {
-    return format(new Date(date), "dd-MM-yyyy");
   };
 
   return (

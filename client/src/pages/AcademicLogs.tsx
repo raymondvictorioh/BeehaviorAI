@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
-import { BookOpen } from "lucide-react";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { AcademicLogDetailsSheet } from "@/components/AcademicLogDetailsSheet";
 import { AddAcademicLogDialog } from "@/components/AddAcademicLogDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -10,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DataTable } from "@/components/ui/data-table";
 import { columns, type AcademicLog } from "@/components/academic-logs/columns";
 import { DataTableToolbar } from "@/components/academic-logs/data-table-toolbar";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 type AcademicCategory = {
   id: string;
@@ -336,17 +338,16 @@ export default function AcademicLogs() {
 
   return (
     <div className="flex h-full flex-1 flex-col space-y-8 p-8">
-      <div className="flex items-center justify-between space-y-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-primary" />
-            <h2 className="text-2xl font-bold tracking-tight">Academic Logs</h2>
-          </div>
-          <p className="text-muted-foreground">
-            View and manage all academic logs across your organization
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Academic Logs"
+        description="View and manage all academic logs across your organization"
+        action={
+          <Button onClick={() => setIsAddLogDialogOpen(true)} data-testid="button-new-log">
+            <Plus className="h-4 w-4 mr-2" />
+            New Log
+          </Button>
+        }
+      />
 
       <DataTable
         columns={columns}
@@ -358,7 +359,6 @@ export default function AcademicLogs() {
             subjects={subjects}
             categories={categories}
             classes={classes}
-            onNewLog={() => setIsAddLogDialogOpen(true)}
             fromDate={fromDate}
             toDate={toDate}
             onFromDateChange={setFromDate}
