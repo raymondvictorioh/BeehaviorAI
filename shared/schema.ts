@@ -312,7 +312,14 @@ export const insertListSchema = createInsertSchema(lists).omit({
 });
 
 export type InsertList = z.infer<typeof insertListSchema>;
-export type List = typeof lists.$inferSelect;
+export type List = typeof lists.$inferSelect & {
+  createdByUser?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  };
+};
 
 // List Items table - Junction table for list contents (polymorphic)
 export const listItems = pgTable(
@@ -346,7 +353,14 @@ export const insertListItemSchema = createInsertSchema(listItems).omit({
 });
 
 export type InsertListItem = z.infer<typeof insertListItemSchema>;
-export type ListItem = typeof listItems.$inferSelect;
+export type ListItem = typeof listItems.$inferSelect & {
+  addedByUser?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  };
+};
 
 // List Shares table - Tracks who lists are shared with
 export const listShares = pgTable(

@@ -49,7 +49,7 @@ import {
   type InsertListShare,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, ne, sql } from "drizzle-orm";
+import { eq, and, ne, sql, inArray } from "drizzle-orm";
 
 export interface DashboardStats {
   totalStudents: number;
@@ -1127,19 +1127,46 @@ export class DatabaseStorage implements IStorage {
   // ========================================
 
   async getLists(organizationId: string, userId: string): Promise<List[]> {
-    // Get lists created by user or shared with user
-    const createdLists = await db
-      .select()
+    // Get lists created by user with user info
+    const createdListsData = await db
+      .select({
+        list: lists,
+        user: users,
+      })
       .from(lists)
+      .leftJoin(users, eq(lists.createdBy, users.id))
       .where(and(eq(lists.organizationId, organizationId), eq(lists.createdBy, userId)));
 
+    const createdLists = createdListsData.map((row) => ({
+      ...row.list,
+      createdByUser: row.user ? {
+        id: row.user.id,
+        firstName: row.user.firstName,
+        lastName: row.user.lastName,
+        email: row.user.email,
+      } : undefined,
+    }));
+
+    // Get shared lists with user info
     const sharedListsData = await db
-      .select({ list: lists })
+      .select({
+        list: lists,
+        user: users,
+      })
       .from(listShares)
       .innerJoin(lists, eq(listShares.listId, lists.id))
+      .leftJoin(users, eq(lists.createdBy, users.id))
       .where(and(eq(lists.organizationId, organizationId), eq(listShares.sharedWithUserId, userId)));
 
-    const sharedLists = sharedListsData.map((row) => row.list);
+    const sharedLists = sharedListsData.map((row) => ({
+      ...row.list,
+      createdByUser: row.user ? {
+        id: row.user.id,
+        firstName: row.user.firstName,
+        lastName: row.user.lastName,
+        email: row.user.email,
+      } : undefined,
+    }));
 
     // Combine and deduplicate
     const allLists = [...createdLists, ...sharedLists];
@@ -1151,12 +1178,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getList(id: string, organizationId: string, userId: string): Promise<List | undefined> {
-    const [list] = await db
-      .select()
+    const [listData] = await db
+      .select({
+        list: lists,
+        user: users,
+      })
       .from(lists)
+      .leftJoin(users, eq(lists.createdBy, users.id))
       .where(and(eq(lists.id, id), eq(lists.organizationId, organizationId)));
 
-    if (!list) return undefined;
+    if (!listData) return undefined;
+
+    const list: List = {
+      ...listData.list,
+      createdByUser: listData.user ? {
+        id: listData.user.id,
+        firstName: listData.user.firstName,
+        lastName: listData.user.lastName,
+        email: listData.user.email,
+      } : undefined,
+    };
 
     // Check if user has access (creator or shared with)
     const isCreator = list.createdBy === userId;
@@ -1219,9 +1260,144 @@ export class DatabaseStorage implements IStorage {
       throw new Error("List not found or no access");
     }
 
-    const items = await db.select().from(listItems).where(eq(listItems.listId, listId));
+    // Get items with user info for addedBy
+    const itemsData = await db
+      .select({
+        item: listItems,
+        addedByUser: users,
+      })
+      .from(listItems)
+      .leftJoin(users, eq(listItems.addedBy, users.id))
+      .where(eq(listItems.listId, listId));
 
-    return items;
+    // Map items and add user info
+    const itemsWithUsers: ListItem[] = itemsData.map((row) => ({
+      ...row.item,
+      addedByUser: row.addedByUser ? {
+        id: row.addedByUser.id,
+        firstName: row.addedByUser.firstName,
+        lastName: row.addedByUser.lastName,
+        email: row.addedByUser.email,
+      } : undefined,
+    }));
+
+    // Now populate related data based on list type
+    if (list.type === "students") {
+      // Get all student IDs from items
+      const studentIds = itemsWithUsers
+        .map((item) => item.studentId)
+        .filter((id): id is string => id !== null);
+
+      console.log("[getListItems] List type: students, studentIds:", studentIds);
+
+      if (studentIds.length > 0) {
+        const studentsData = await db
+          .select()
+          .from(students)
+          .where(inArray(students.id, studentIds));
+
+        console.log("[getListItems] Fetched students count:", studentsData.length);
+        console.log("[getListItems] Students data:", studentsData);
+
+        // Map students to items - always return, even if no students found
+        const mappedItems = itemsWithUsers.map((item) => ({
+          ...item,
+          student: studentsData.find((s) => s.id === item.studentId),
+        }));
+
+        console.log("[getListItems] Mapped items:", JSON.stringify(mappedItems, null, 2));
+
+        return mappedItems;
+      }
+
+      // No student IDs, return items as-is
+      console.log("[getListItems] No student IDs found, returning items as-is");
+      return itemsWithUsers;
+    } else if (list.type === "behavior_logs") {
+      // Get all behavior log IDs from items
+      const behaviorLogIds = itemsWithUsers
+        .map((item) => item.behaviorLogId)
+        .filter((id): id is string => id !== null);
+
+      if (behaviorLogIds.length > 0) {
+        const behaviorLogsData = await db
+          .select({
+            log: behaviorLogs,
+            student: students,
+            category: behaviorLogCategories,
+          })
+          .from(behaviorLogs)
+          .leftJoin(students, eq(behaviorLogs.studentId, students.id))
+          .leftJoin(behaviorLogCategories, eq(behaviorLogs.categoryId, behaviorLogCategories.id))
+          .where(inArray(behaviorLogs.id, behaviorLogIds));
+
+        // Map behavior logs to items
+        const mappedItems = itemsWithUsers.map((item) => {
+          const logData = behaviorLogsData.find((l) => l.log.id === item.behaviorLogId);
+          return {
+            ...item,
+            behaviorLog: logData ? {
+              ...logData.log,
+              student: logData.student ? { name: logData.student.name } : undefined,
+              category: logData.category ? {
+                name: logData.category.name,
+                color: logData.category.color,
+              } : undefined,
+            } : undefined,
+          };
+        });
+
+        return mappedItems;
+      }
+
+      // No behavior log IDs, return items as-is
+      return itemsWithUsers;
+    } else if (list.type === "academic_logs") {
+      // Get all academic log IDs from items
+      const academicLogIds = itemsWithUsers
+        .map((item) => item.academicLogId)
+        .filter((id): id is string => id !== null);
+
+      if (academicLogIds.length > 0) {
+        const academicLogsData = await db
+          .select({
+            log: academicLogs,
+            student: students,
+            subject: subjects,
+            category: academicLogCategories,
+          })
+          .from(academicLogs)
+          .leftJoin(students, eq(academicLogs.studentId, students.id))
+          .leftJoin(subjects, eq(academicLogs.subjectId, subjects.id))
+          .leftJoin(academicLogCategories, eq(academicLogs.categoryId, academicLogCategories.id))
+          .where(inArray(academicLogs.id, academicLogIds));
+
+        // Map academic logs to items
+        const mappedItems = itemsWithUsers.map((item) => {
+          const logData = academicLogsData.find((l) => l.log.id === item.academicLogId);
+          return {
+            ...item,
+            academicLog: logData ? {
+              ...logData.log,
+              student: logData.student ? { name: logData.student.name } : undefined,
+              subject: logData.subject ? { name: logData.subject.name } : undefined,
+              category: logData.category ? {
+                name: logData.category.name,
+                color: logData.category.color,
+              } : undefined,
+            } : undefined,
+          };
+        });
+
+        return mappedItems;
+      }
+
+      // No academic log IDs, return items as-is
+      return itemsWithUsers;
+    }
+
+    // Fallback: return items with user info
+    return itemsWithUsers;
   }
 
   async addListItem(item: InsertListItem, userId: string): Promise<ListItem> {

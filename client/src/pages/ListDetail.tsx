@@ -34,6 +34,12 @@ type List = {
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
+  createdByUser?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  };
 };
 
 type Student = {
@@ -76,6 +82,12 @@ type ListItem = {
   addedBy: string;
   addedAt: Date;
   notes: string | null;
+  addedByUser?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  };
   // Populated based on type
   student?: Student;
   behaviorLog?: BehaviorLog;
@@ -114,7 +126,7 @@ export default function ListDetail() {
     enabled: !!orgId && !!listId,
   });
 
-  const isOwner = list?.createdBy === user?.email;
+  const isOwner = list?.createdBy === user?.id;
 
   // Fetch list shares
   const { data: shares = [] } = useQuery<ListShare[]>({
@@ -422,6 +434,7 @@ export default function ListDetail() {
         accessorKey: "addedBy",
         id: "addedBy",
         header: "Added By",
+        cell: ({ row }) => getUserDisplayName(row.original.addedByUser, row.original.addedBy),
       },
       {
         accessorKey: "addedAt",
@@ -470,6 +483,23 @@ export default function ListDetail() {
       case "academic_logs":
         return "Academic Logs";
     }
+  };
+
+  const getUserDisplayName = (userObj?: { firstName: string | null; lastName: string | null; email: string | null }, userId?: string) => {
+    // Check if this is the current user
+    if (userId === user?.id) return "You";
+
+    if (!userObj) return "Unknown";
+
+    const { firstName, lastName, email } = userObj;
+
+    if (firstName && lastName) {
+      return `${firstName} ${lastName}`;
+    }
+    if (firstName) return firstName;
+    if (lastName) return lastName;
+    if (email) return email;
+    return "Unknown";
   };
 
   const handleDeleteItem = (itemId: string) => {
@@ -527,30 +557,33 @@ export default function ListDetail() {
   }
 
   return (
-    <div className="flex h-full flex-1 flex-col space-y-8 p-8">
-      <div className="flex items-center justify-between space-y-2">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setLocation("/lists")}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              {getListTypeIcon(list.type)}
-              <h2 className="text-2xl font-bold tracking-tight">{list.name}</h2>
-              <Badge variant="secondary">{getListTypeLabel(list.type)}</Badge>
-            </div>
-            {list.description && (
-              <p className="text-muted-foreground mt-1">{list.description}</p>
-            )}
-            <p className="text-sm text-muted-foreground mt-1">
-              Created by {list.createdBy} on {format(new Date(list.createdAt), "MMM d, yyyy")}
-            </p>
+    <div className="flex h-full flex-1 flex-col space-y-6 p-8">
+      {/* Back button row */}
+      <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setLocation("/lists")}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+      </div>
+
+      {/* Header section with title, description, and actions */}
+      <div className="flex items-start justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            {getListTypeIcon(list.type)}
+            <h2 className="text-2xl font-bold tracking-tight">{list.name}</h2>
+            <Badge variant="secondary">{getListTypeLabel(list.type)}</Badge>
           </div>
+          {list.description && (
+            <p className="text-muted-foreground">{list.description}</p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Created by {getUserDisplayName(list.createdByUser, list.createdBy)} on {format(new Date(list.createdAt), "MMM d, yyyy")}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {isOwner && (

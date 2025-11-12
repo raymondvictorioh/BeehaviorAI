@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -7,11 +7,12 @@ import { List, Plus, Users, ClipboardList, BookOpen, Trash2 } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DataTable } from "@/components/ui/data-table";
 import { CreateListDialog } from "@/components/CreateListDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +35,12 @@ type List = {
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
+  createdByUser?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  };
 };
 
 type ListWithItemCount = List & {
@@ -75,10 +82,16 @@ export default function Lists() {
         name: newList.name,
         description: newList.description || null,
         type: newList.type,
-        createdBy: user?.email || "Unknown",
+        createdBy: userId!,
         createdAt: new Date(),
         updatedAt: new Date(),
         itemCount: 0,
+        createdByUser: user ? {
+          id: user.id,
+          firstName: user.firstName || null,
+          lastName: user.lastName || null,
+          email: user.email || null,
+        } : undefined,
       };
 
       queryClient.setQueryData(["/api/organizations", orgId, "lists"], (old: any[]) =>
@@ -154,25 +167,25 @@ export default function Lists() {
     if (!matchesSearch) return false;
 
     if (activeTab === "mine") {
-      return list.createdBy === user?.email;
+      return list.createdBy === userId;
     } else if (activeTab === "shared") {
-      return list.createdBy !== user?.email;
+      return list.createdBy !== userId;
     }
     return true;
   });
 
   // Get counts for tabs
-  const myListsCount = lists.filter((l) => l.createdBy === user?.email).length;
-  const sharedListsCount = lists.filter((l) => l.createdBy !== user?.email).length;
+  const myListsCount = lists.filter((l) => l.createdBy === userId).length;
+  const sharedListsCount = lists.filter((l) => l.createdBy !== userId).length;
 
   const getListTypeIcon = (type: ListType) => {
     switch (type) {
       case "students":
-        return <Users className="h-5 w-5" />;
+        return <Users className="h-4 w-4" />;
       case "behavior_logs":
-        return <ClipboardList className="h-5 w-5" />;
+        return <ClipboardList className="h-4 w-4" />;
       case "academic_logs":
-        return <BookOpen className="h-5 w-5" />;
+        return <BookOpen className="h-4 w-4" />;
     }
   };
 
@@ -187,6 +200,98 @@ export default function Lists() {
     }
   };
 
+  const getCreatedByName = (list: ListWithItemCount) => {
+    if (!list.createdByUser) return "Unknown";
+
+    const { firstName, lastName, email } = list.createdByUser;
+
+    if (firstName && lastName) {
+      return `${firstName} ${lastName}`;
+    }
+    if (firstName) return firstName;
+    if (lastName) return lastName;
+    if (email) return email;
+    return "Unknown";
+  };
+
+  // Define table columns
+  const columns = useMemo<ColumnDef<ListWithItemCount>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            {getListTypeIcon(row.original.type)}
+            <span className="font-medium">{row.original.name}</span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "type",
+        header: "Type",
+        cell: ({ row }) => (
+          <Badge variant="secondary">
+            {getListTypeLabel(row.original.type)}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "description",
+        header: "Description",
+        cell: ({ row }) => {
+          const desc = row.original.description;
+          if (!desc) return <span className="text-muted-foreground">—</span>;
+          return desc.length > 60 ? `${desc.substring(0, 60)}...` : desc;
+        },
+      },
+      {
+        accessorKey: "itemCount",
+        header: "Items",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.original.itemCount || 0}</span>
+        ),
+      },
+      {
+        accessorKey: "createdBy",
+        header: "Created By",
+        cell: ({ row }) => {
+          const isOwner = row.original.createdBy === userId;
+          const creatorName = getCreatedByName(row.original);
+          return isOwner ? "You" : creatorName;
+        },
+      },
+      {
+        accessorKey: "createdAt",
+        header: "Created",
+        cell: ({ row }) => format(new Date(row.original.createdAt), "MMM d, yyyy"),
+      },
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) => {
+          const isOwner = row.original.createdBy === userId;
+          if (!isOwner) return null;
+
+          return (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteListId(row.original.id);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          );
+        },
+      },
+    ],
+    [userId]
+  );
+
   const handleCreateList = (data: { name: string; description?: string; type: ListType }) => {
     createList.mutate(data);
   };
@@ -195,8 +300,8 @@ export default function Lists() {
     deleteList.mutate(id);
   };
 
-  const handleCardClick = (listId: string) => {
-    setLocation(`/lists/${listId}`);
+  const handleRowClick = (row: ListWithItemCount) => {
+    setLocation(`/lists/${row.id}`);
   };
 
   if (isLoading) {
@@ -253,81 +358,29 @@ export default function Lists() {
 
           <TabsContent value={activeTab} className="mt-6">
             {filteredLists.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-16">
-                  <List className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No lists found</h3>
-                  <p className="text-muted-foreground text-center mb-4">
-                    {searchQuery
-                      ? "Try adjusting your search query"
-                      : activeTab === "mine"
-                      ? "Create your first list to get started"
-                      : "No lists have been shared with you yet"}
-                  </p>
-                  {!searchQuery && activeTab === "mine" && (
-                    <Button onClick={() => setIsCreateDialogOpen(true)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create List
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredLists.map((list) => {
-                  const isOwner = list.createdBy === user?.email;
-                  return (
-                    <Card
-                      key={list.id}
-                      className="cursor-pointer transition-colors hover:bg-muted/50"
-                      onClick={() => handleCardClick(list.id)}
-                    >
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            {getListTypeIcon(list.type)}
-                            <CardTitle className="text-lg">{list.name}</CardTitle>
-                          </div>
-                          {isOwner && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteListId(list.id);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                        {list.description && (
-                          <CardDescription className="line-clamp-2">
-                            {list.description}
-                          </CardDescription>
-                        )}
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center justify-between text-sm">
-                          <Badge variant="secondary">
-                            {getListTypeLabel(list.type)}
-                          </Badge>
-                          <span className="text-muted-foreground">
-                            {list.itemCount || 0} items
-                          </span>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                          <span>
-                            {isOwner ? "Created by you" : `Created by ${list.createdBy}`}
-                          </span>
-                          <span>{format(new Date(list.createdAt), "MMM d, yyyy")}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+              <div className="flex flex-col items-center justify-center py-16 border rounded-lg bg-card">
+                <List className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No lists found</h3>
+                <p className="text-muted-foreground text-center mb-4">
+                  {searchQuery
+                    ? "Try adjusting your search query"
+                    : activeTab === "mine"
+                    ? "Create your first list to get started"
+                    : "No lists have been shared with you yet"}
+                </p>
+                {!searchQuery && activeTab === "mine" && (
+                  <Button onClick={() => setIsCreateDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create List
+                  </Button>
+                )}
               </div>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={filteredLists}
+                onRowClick={handleRowClick}
+              />
             )}
           </TabsContent>
         </Tabs>
