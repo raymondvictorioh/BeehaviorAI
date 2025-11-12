@@ -9,7 +9,9 @@
       "Bash(npm rebuild:*)",
       "Bash(sudo chown:*)",
       "Bash(curl:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run check:*)"
     ],
     "deny": [],
     "ask": []

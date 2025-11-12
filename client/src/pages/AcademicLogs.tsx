@@ -8,7 +8,6 @@ import { AcademicLogDetailsSheet } from "@/components/AcademicLogDetailsSheet";
 import { AddAcademicLogDialog } from "@/components/AddAcademicLogDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { columns, type AcademicLog } from "@/components/academic-logs/columns";
 import { DataTableToolbar } from "@/components/academic-logs/data-table-toolbar";

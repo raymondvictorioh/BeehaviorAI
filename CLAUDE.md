@@ -189,6 +189,18 @@ All storage methods follow the same pattern as behavior logs:
 
 ### Recent Changes
 
+**November 13, 2025 - Backend Refactoring & Test Infrastructure:**
+- **MAJOR**: Backend refactoring reducing boilerplate by 60-70%
+- Comprehensive test infrastructure with 90 tests (100% passing)
+- Centralized error handling middleware
+- Async handler wrapper eliminating try-catch blocks
+- Validation middleware for consistent Zod schema usage
+- Route factory pattern reducing route definitions from 13-19 lines to 5 lines
+- Test-driven development (TDD) approach for all new infrastructure
+- 5 routes migrated as proof of concept (students, categories, tasks)
+- Full documentation in CLAUDE.md with examples
+- **Impact**: Faster development, consistent error handling, easier maintenance
+
 **November 10, 2025 - Academic Logs System:**
 - New academic tracking feature alongside behavior management
 - 3 new database tables: subjects, academic_log_categories, academic_logs
@@ -488,7 +500,113 @@ const mutation = useMutation({
 });
 ```
 
-### 2. Naming Conventions
+### 2. Backend Route Patterns (NEW - November 2025)
+
+**BeehaviorAI now uses a standardized route factory pattern that reduces boilerplate by 60-70%.**
+
+#### Centralized Middleware
+
+All routes benefit from three core middleware components:
+
+1. **Error Handler Middleware** (`server/middleware/errorHandler.ts`)
+   - Handles Zod validation errors → 400 status
+   - Handles database constraints (23503, 23505, 23502) → 400 status
+   - Handles "not found" errors → 404 status
+   - Handles generic errors → 500 status
+   - Registered globally in `server/index.ts`
+
+2. **Async Handler Wrapper** (`server/middleware/asyncHandler.ts`)
+   - Wraps async route handlers
+   - Automatically catches promise rejections
+   - Forwards errors to error handler
+   - **Note**: Not needed when using `createHandler` (which includes async handling)
+
+3. **Validation Middleware** (`server/middleware/validate.ts`)
+   - Validates request body against Zod schemas
+   - Transforms data according to schema
+   - Passes validation errors to error handler
+
+#### Route Factory Pattern
+
+Use `createHandler` from `server/utils/routeFactory.ts` for ALL new routes:
+
+```typescript
+import { createHandler } from "./utils/routeFactory";
+import { isAuthenticated, checkOrganizationAccess } from "./supabaseAuth";
+
+// Simple GET route (Before: 13 lines | After: 5 lines)
+app.get(
+  "/api/organizations/:orgId/students",
+  isAuthenticated,
+  checkOrganizationAccess,
+  createHandler({
+    storage: ({ orgId }) => storage.getStudents(orgId!),
+  })
+);
+
+// GET route with nested params (Before: 13 lines | After: 5 lines)
+app.get(
+  "/api/organizations/:orgId/students/:studentId/resources",
+  isAuthenticated,
+  checkOrganizationAccess,
+  createHandler({
+    storage: ({ orgId, studentId }) => storage.getStudentResources(studentId!, orgId!),
+  })
+);
+
+// POST route with validation and data injection (Before: 28 lines | After: 8 lines)
+app.post(
+  "/api/organizations/:orgId/students",
+  isAuthenticated,
+  checkOrganizationAccess,
+  createHandler({
+    storage: ({ data }) => storage.createStudent(data),
+    schema: insertStudentSchema,
+    dataInjection: (req) => ({ organizationId: req.params.orgId }),
+  })
+);
+
+// DELETE route (Before: 13 lines | After: 5 lines)
+app.delete(
+  "/api/organizations/:orgId/resources/:id",
+  isAuthenticated,
+  checkOrganizationAccess,
+  createHandler({
+    storage: ({ orgId, id }) => storage.deleteStudentResource(id!, orgId!),
+  })
+);
+```
+
+**What `createHandler` does automatically:**
+- Extracts params (orgId, id, studentId, userId)
+- Injects data into request body (organizationId, etc.)
+- Validates with Zod schema (if provided)
+- Calls storage method
+- Returns JSON response
+- Forwards errors to error handler middleware
+
+**When to use `!` (non-null assertion):**
+TypeScript marks params as potentially undefined, but middleware ensures they exist. Use `orgId!` and `id!` when calling storage methods.
+
+#### Testing Backend Routes
+
+All new middleware and utilities have comprehensive test coverage:
+
+```bash
+npm test                    # Run all tests (90 tests)
+npm test -- errorHandler    # Test error handler (21 tests)
+npm test -- asyncHandler    # Test async wrapper (20 tests)
+npm test -- validate        # Test validation (23 tests)
+npm test -- routeFactory    # Test route factory (26 tests)
+```
+
+**Test locations:**
+- `server/middleware/__tests__/errorHandler.test.ts`
+- `server/middleware/__tests__/asyncHandler.test.ts`
+- `server/middleware/__tests__/validate.test.ts`
+- `server/utils/__tests__/routeFactory.test.ts`
+
+### 3. Naming Conventions
 
 #### Mutations
 - CREATE: `create{ResourceName}` (e.g., `createBehaviorLog`, `createStudent`)
