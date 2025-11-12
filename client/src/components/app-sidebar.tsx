@@ -1,4 +1,4 @@
-import { GraduationCap, Home, Users, FileText, Settings, Moon, Sun, ClipboardList, BookOpen, List } from "lucide-react";
+import { GraduationCap, Home, Users, FileText, Settings, Moon, Sun, ClipboardList, BookOpen, List, CheckSquare } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -47,6 +47,11 @@ const menuItems = [
     title: "Reports",
     url: "/reports",
     icon: FileText,
+  },
+  {
+    title: "Tasks",
+    url: "/tasks",
+    icon: CheckSquare,
   },
   {
     title: "Settings",

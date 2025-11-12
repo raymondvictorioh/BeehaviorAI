@@ -6,7 +6,7 @@ import {
   behaviorLogs,
   behaviorLogCategories,
   meetingNotes,
-  followUps,
+  tasks,
   classes,
   studentResources,
   subjects,
@@ -29,8 +29,8 @@ import {
   type InsertBehaviorLogCategory,
   type MeetingNote,
   type InsertMeetingNote,
-  type FollowUp,
-  type InsertFollowUp,
+  type Task,
+  type InsertTask,
   type Class,
   type InsertClass,
   type StudentResource,
@@ -54,7 +54,7 @@ import { eq, and, ne, sql, inArray } from "drizzle-orm";
 export interface DashboardStats {
   totalStudents: number;
   totalBehaviorLogs: number;
-  pendingFollowUps: number;
+  pendingTasks: number;
   positiveLogsPercentage: number;
 }
 
@@ -93,12 +93,13 @@ export interface IStorage {
   getMeetingNotes(studentId: string, organizationId: string): Promise<MeetingNote[]>;
   createMeetingNote(note: InsertMeetingNote): Promise<MeetingNote>;
   
-  // Follow-up operations
-  getFollowUps(studentId: string, organizationId: string): Promise<FollowUp[]>;
-  getAllFollowUps(organizationId: string): Promise<FollowUp[]>;
-  createFollowUp(followUp: InsertFollowUp): Promise<FollowUp>;
-  updateFollowUp(id: string, organizationId: string, followUp: Partial<InsertFollowUp>): Promise<FollowUp>;
-  deleteFollowUp(id: string, organizationId: string): Promise<void>;
+  // Task operations
+  getTasks(studentId: string, organizationId: string): Promise<Task[]>;
+  getAllTasks(organizationId: string): Promise<Task[]>;
+  getAllTasksWithStudents(organizationId: string): Promise<Array<Task & { student: Student | null }>>;
+  createTask(task: InsertTask): Promise<Task>;
+  updateTask(id: string, organizationId: string, task: Partial<InsertTask>): Promise<Task>;
+  deleteTask(id: string, organizationId: string): Promise<void>;
   
   // Behavior Log Category operations
   getBehaviorLogCategories(organizationId: string): Promise<BehaviorLogCategory[]>;
@@ -237,8 +238,8 @@ export class DatabaseStorage implements IStorage {
 
   async getDashboardStats(organizationId: string): Promise<DashboardStats> {
     const studentsData = await db.select().from(students).where(eq(students.organizationId, organizationId));
-    const followUpsData = await db.select().from(followUps).where(eq(followUps.organizationId, organizationId));
-    
+    const tasksData = await db.select().from(tasks).where(eq(tasks.organizationId, organizationId));
+
     // Get behavior logs with category information
     const behaviorLogsData = await db
       .select({
@@ -251,24 +252,24 @@ export class DatabaseStorage implements IStorage {
 
     const totalStudents = studentsData.length;
     const totalBehaviorLogs = behaviorLogsData.length;
-    
-    // Count follow-ups that are not Done or Archived
-    const pendingFollowUps = followUpsData.filter(fu => 
-      fu.status !== "Done" && fu.status !== "Archived"
+
+    // Count tasks that are not Done or Archived
+    const pendingTasks = tasksData.filter(task =>
+      task.status !== "Done" && task.status !== "Archived"
     ).length;
-    
+
     // Count positive logs by joining with categories
-    const positiveLogs = behaviorLogsData.filter(log => 
+    const positiveLogs = behaviorLogsData.filter(log =>
       log.categoryName?.toLowerCase() === "positive"
     ).length;
-    const positiveLogsPercentage = totalBehaviorLogs > 0 
-      ? Math.round((positiveLogs / totalBehaviorLogs) * 100) 
+    const positiveLogsPercentage = totalBehaviorLogs > 0
+      ? Math.round((positiveLogs / totalBehaviorLogs) * 100)
       : 0;
 
     return {
       totalStudents,
       totalBehaviorLogs,
-      pendingFollowUps,
+      pendingTasks,
       positiveLogsPercentage,
     };
   }
@@ -531,29 +532,58 @@ export class DatabaseStorage implements IStorage {
     return newNote;
   }
 
-  // Follow-up operations
-  async getFollowUps(studentId: string, organizationId: string): Promise<FollowUp[]> {
+  // Task operations
+  async getTasks(studentId: string, organizationId: string): Promise<Task[]> {
     return db
       .select()
-      .from(followUps)
-      .where(and(eq(followUps.studentId, studentId), eq(followUps.organizationId, organizationId)));
+      .from(tasks)
+      .where(and(eq(tasks.studentId, studentId), eq(tasks.organizationId, organizationId)));
   }
 
-  async getAllFollowUps(organizationId: string): Promise<FollowUp[]> {
-    return db.select().from(followUps).where(eq(followUps.organizationId, organizationId));
+  async getAllTasks(organizationId: string): Promise<Task[]> {
+    return db.select().from(tasks).where(eq(tasks.organizationId, organizationId));
   }
 
-  async createFollowUp(followUp: InsertFollowUp): Promise<FollowUp> {
-    const [newFollowUp] = await db.insert(followUps).values(followUp).returning();
-    return newFollowUp;
+  async getAllTasksWithStudents(organizationId: string): Promise<Array<Task & { student: Student | null }>> {
+    const result = await db
+      .select({
+        task: tasks,
+        student: students,
+      })
+      .from(tasks)
+      .leftJoin(
+        students,
+        and(
+          eq(tasks.studentId, students.id),
+          eq(students.organizationId, organizationId)
+        )
+      )
+      .where(eq(tasks.organizationId, organizationId))
+      .orderBy(tasks.createdAt);
+
+    console.log("[Storage] getAllTasksWithStudents raw result:", JSON.stringify(result, null, 2));
+
+    const mapped = result.map((row) => ({
+      ...row.task,
+      student: row.student,
+    }));
+
+    console.log("[Storage] getAllTasksWithStudents mapped result:", JSON.stringify(mapped, null, 2));
+
+    return mapped;
   }
 
-  async updateFollowUp(id: string, organizationId: string, followUp: Partial<InsertFollowUp>): Promise<FollowUp> {
-    console.log(`[DEBUG Storage] updateFollowUp called with:`, {
+  async createTask(task: InsertTask): Promise<Task> {
+    const [newTask] = await db.insert(tasks).values(task).returning();
+    return newTask;
+  }
+
+  async updateTask(id: string, organizationId: string, task: Partial<InsertTask>): Promise<Task> {
+    console.log(`[DEBUG Storage] updateTask called with:`, {
       id,
       organizationId,
-      followUp,
-      followUpKeys: Object.keys(followUp),
+      task,
+      taskKeys: Object.keys(task),
     });
 
     // Filter out undefined values to ensure we only update provided fields
@@ -563,32 +593,32 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Only include fields that are explicitly provided (not undefined)
-    if (followUp.title !== undefined) updateData.title = followUp.title;
-    if (followUp.description !== undefined) updateData.description = followUp.description;
-    if (followUp.status !== undefined) updateData.status = followUp.status;
-    if (followUp.assignee !== undefined) updateData.assignee = followUp.assignee;
-    if (followUp.dueDate !== undefined) updateData.dueDate = followUp.dueDate;
+    if (task.title !== undefined) updateData.title = task.title;
+    if (task.description !== undefined) updateData.description = task.description;
+    if (task.status !== undefined) updateData.status = task.status;
+    if (task.assignee !== undefined) updateData.assignee = task.assignee;
+    if (task.dueDate !== undefined) updateData.dueDate = task.dueDate;
 
     console.log(`[DEBUG Storage] Final updateData to be sent to DB:`, updateData);
 
     const [updated] = await db
-      .update(followUps)
+      .update(tasks)
       .set(updateData)
-      .where(and(eq(followUps.id, id), eq(followUps.organizationId, organizationId)))
+      .where(and(eq(tasks.id, id), eq(tasks.organizationId, organizationId)))
       .returning();
 
     if (!updated) {
-      throw new Error("Follow-up not found");
+      throw new Error("Task not found");
     }
 
-    console.log(`[DEBUG Storage] Follow-up updated successfully:`, updated);
+    console.log(`[DEBUG Storage] Task updated successfully:`, updated);
     return updated;
   }
 
-  async deleteFollowUp(id: string, organizationId: string): Promise<void> {
+  async deleteTask(id: string, organizationId: string): Promise<void> {
     await db
-      .delete(followUps)
-      .where(and(eq(followUps.id, id), eq(followUps.organizationId, organizationId)));
+      .delete(tasks)
+      .where(and(eq(tasks.id, id), eq(tasks.organizationId, organizationId)));
   }
 
   // Behavior Log Category operations

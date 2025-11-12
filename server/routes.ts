@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated, checkOrganizationAccess, supabase } from "./supabaseAuth";
 import { getChatCompletion, transcribeAudio, generateMeetingSummary } from "./openai";
 import {
-  insertFollowUpSchema,
+  insertTaskSchema,
   insertStudentResourceSchema,
   insertSubjectSchema,
   insertAcademicLogCategorySchema,
@@ -624,24 +624,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Follow-ups routes
-  app.get("/api/organizations/:orgId/students/:studentId/follow-ups", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+  // Tasks routes
+  // Get all tasks for organization (with student data)
+  app.get("/api/organizations/:orgId/tasks", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
-      const { orgId, studentId } = req.params;
-      const followUps = await storage.getFollowUps(studentId, orgId);
-      res.json(followUps);
+      const { orgId } = req.params;
+      console.log("[API] ========= FETCHING TASKS FOR ORG:", orgId, "=========");
+      const tasks = await storage.getAllTasksWithStudents(orgId);
+      console.log("[API] Number of tasks returned:", tasks.length);
+      console.log("[API] First task has student field?", tasks.length > 0 ? "student" in tasks[0] : "N/A");
+      console.log("[API] getAllTasksWithStudents returned:", JSON.stringify(tasks, null, 2));
+      res.json(tasks);
     } catch (error) {
-      console.error("Error fetching follow-ups:", error);
-      res.status(500).json({ message: "Failed to fetch follow-ups" });
+      console.error("Error fetching all tasks:", error);
+      res.status(500).json({ message: "Failed to fetch tasks" });
     }
   });
 
-  app.post("/api/organizations/:orgId/students/:studentId/follow-ups", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+  // Get tasks for specific student
+  app.get("/api/organizations/:orgId/students/:studentId/tasks", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, studentId } = req.params;
-      
-      // Prepare follow-up data with proper date formatting
-      const followUpData: any = {
+      const tasks = await storage.getTasks(studentId, orgId);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+      res.status(500).json({ message: "Failed to fetch tasks" });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/students/:studentId/tasks", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+
+      // Prepare task data with proper date formatting
+      const taskData: any = {
         title: req.body.title,
         description: req.body.description || null,
         status: req.body.status || "To-Do",
@@ -649,39 +666,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         organizationId: orgId,
         studentId,
       };
-      
+
       // Convert dueDate string to Date object if provided
       if (req.body.dueDate) {
-        followUpData.dueDate = new Date(req.body.dueDate);
+        taskData.dueDate = new Date(req.body.dueDate);
       } else {
-        followUpData.dueDate = null;
+        taskData.dueDate = null;
       }
-      
+
       // Validate with schema
-      const validatedData = insertFollowUpSchema.parse(followUpData);
-      const newFollowUp = await storage.createFollowUp(validatedData);
-      res.json(newFollowUp);
+      const validatedData = insertTaskSchema.parse(taskData);
+      const newTask = await storage.createTask(validatedData);
+      res.json(newTask);
     } catch (error: any) {
-      console.error("Error creating follow-up:", error);
-      
+      console.error("Error creating task:", error);
+
       // Provide more detailed error messages
       if (error.code === "23503") {
         res.status(400).json({ message: "Invalid organization or student ID" });
       } else if (error.name === "ZodError") {
         res.status(400).json({ message: "Validation error", errors: error.errors });
       } else {
-        res.status(500).json({ message: "Failed to create follow-up", error: error.message });
+        res.status(500).json({ message: "Failed to create task", error: error.message });
       }
     }
   });
 
-  app.patch("/api/organizations/:orgId/follow-ups/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+  app.patch("/api/organizations/:orgId/tasks/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, id } = req.params;
 
-      console.log(`[DEBUG] PATCH follow-up request:`, {
+      console.log(`[DEBUG] PATCH task request:`, {
         orgId,
-        followUpId: id,
+        taskId: id,
         body: req.body,
         bodyKeys: Object.keys(req.body),
       });
@@ -733,35 +750,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[DEBUG] Update data prepared:`, updateData);
 
-      const updatedFollowUp = await storage.updateFollowUp(id, orgId, updateData);
-      console.log(`[DEBUG] Follow-up updated successfully`);
+      const updatedTask = await storage.updateTask(id, orgId, updateData);
+      console.log(`[DEBUG] Task updated successfully`);
 
-      res.json(updatedFollowUp);
+      res.json(updatedTask);
     } catch (error: any) {
-      console.error("Error updating follow-up:", error);
+      console.error("Error updating task:", error);
 
       // Provide more detailed error messages
       if (error.code === "23503") {
-        res.status(400).json({ message: "Invalid organization or follow-up ID" });
+        res.status(400).json({ message: "Invalid organization or task ID" });
       } else if (error.name === "ZodError") {
         res.status(400).json({ message: "Validation error", errors: error.errors });
       } else if (error.code === "23502") {
         // NOT NULL constraint violation
-        res.status(400).json({ message: "Failed to update follow-up", error: error.message });
+        res.status(400).json({ message: "Failed to update task", error: error.message });
       } else {
-        res.status(500).json({ message: "Failed to update follow-up", error: error.message });
+        res.status(500).json({ message: "Failed to update task", error: error.message });
       }
     }
   });
 
-  app.delete("/api/organizations/:orgId/follow-ups/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+  app.delete("/api/organizations/:orgId/tasks/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, id } = req.params;
-      await storage.deleteFollowUp(id, orgId);
+      await storage.deleteTask(id, orgId);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting follow-up:", error);
-      res.status(500).json({ message: "Failed to delete follow-up" });
+      console.error("Error deleting task:", error);
+      res.status(500).json({ message: "Failed to delete task" });
     }
   });
 

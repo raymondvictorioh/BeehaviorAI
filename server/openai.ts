@@ -62,7 +62,7 @@ Please provide a clear, professional summary that would be useful for teachers a
       messages: [
         {
           role: "system",
-          content: "You are an expert at summarizing educational meetings about student behavior. Create concise, actionable summaries that highlight key points, decisions, and follow-up actions."
+          content: "You are an expert at summarizing educational meetings about student behavior. Create concise, actionable summaries that highlight key points, decisions, and task actions."
         },
         {
           role: "user",

@@ -4,7 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Trash2, Calendar } from "lucide-react";
 
-interface FollowUpItemProps {
+interface TaskItemProps {
   id: string;
   title: string;
   dueDate: string;
@@ -21,7 +21,7 @@ const priorityColors = {
   high: "bg-red-500",
 };
 
-export function FollowUpItem({
+export function TaskItem({
   id,
   title,
   dueDate,
@@ -30,21 +30,21 @@ export function FollowUpItem({
   onToggle,
   onEdit,
   onDelete,
-}: FollowUpItemProps) {
+}: TaskItemProps) {
   return (
-    <Card data-testid={`card-followup-${id}`}>
+    <Card data-testid={`card-task-${id}`}>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <Checkbox
             checked={completed}
             onCheckedChange={onToggle}
             className="mt-1"
-            data-testid={`checkbox-followup-${id}`}
+            data-testid={`checkbox-task-${id}`}
           />
           <div className="flex-1 min-w-0">
             <p
               className={`text-sm font-medium ${completed ? "line-through text-muted-foreground" : ""}`}
-              data-testid={`text-followup-title-${id}`}
+              data-testid={`text-task-title-${id}`}
             >
               {title}
             </p>
@@ -65,7 +65,7 @@ export function FollowUpItem({
               size="icon"
               className="h-8 w-8"
               onClick={onEdit}
-              data-testid={`button-edit-followup-${id}`}
+              data-testid={`button-edit-task-${id}`}
             >
               <Edit className="h-4 w-4" />
             </Button>
@@ -74,7 +74,7 @@ export function FollowUpItem({
               size="icon"
               className="h-8 w-8"
               onClick={onDelete}
-              data-testid={`button-delete-followup-${id}`}
+              data-testid={`button-delete-task-${id}`}
             >
               <Trash2 className="h-4 w-4" />
             </Button>

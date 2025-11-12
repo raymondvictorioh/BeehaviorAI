@@ -37,6 +37,7 @@ const AcademicLogs = lazy(() => import("@/pages/AcademicLogs"));
 const Lists = lazy(() => import("@/pages/Lists"));
 const ListDetail = lazy(() => import("@/pages/ListDetail"));
 const Reports = lazy(() => import("@/pages/Reports"));
+const Tasks = lazy(() => import("@/pages/Tasks"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
@@ -67,6 +68,7 @@ function AppRouter() {
         <Route path="/lists" component={Lists} />
         <Route path="/lists/:id" component={ListDetail} />
         <Route path="/reports" component={Reports} />
+        <Route path="/tasks" component={Tasks} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>

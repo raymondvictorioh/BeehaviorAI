@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from "react";
-import { FollowUp, type User } from "@shared/schema";
+import { Task, type User } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,11 +38,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 interface KanbanBoardProps {
-  followUps: FollowUp[];
-  onEdit?: (followUp: FollowUp) => void;
-  onDelete?: (followUp: FollowUp) => void;
-  onStatusChange?: (followUp: FollowUp, newStatus: string) => void;
+  tasks: Task[];
+  onEdit?: (task: Task) => void;
+  onDelete?: (task: Task) => void;
+  onStatusChange?: (task: Task, newStatus: string) => void;
   organizationId?: string;
+  showStudentInfo?: boolean;
 }
 
 const statusColumns = [
@@ -101,33 +102,33 @@ function formatDueDateText(dueDate: Date | string | null): string {
   return format(due, "MMM d");
 }
 
-// Draggable Follow-up Card Component
-function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, userMap }: {
-  followUp: FollowUp;
-  onEdit?: (followUp: FollowUp) => void;
-  onDelete?: (followUp: FollowUp) => void;
-  onStatusChange?: (followUp: FollowUp, newStatus: string) => void;
+// Draggable Task Card Component
+function DraggableTaskCard({ task, onEdit, onDelete, onStatusChange, userMap }: {
+  task: Task;
+  onEdit?: (task: Task) => void;
+  onDelete?: (task: Task) => void;
+  onStatusChange?: (task: Task, newStatus: string) => void;
   userMap?: Map<string, User>;
 }) {
-  const dueDateStatus = getDueDateStatus(followUp.dueDate);
+  const dueDateStatus = getDueDateStatus(task.dueDate);
   
   // Get user info from assignee ID
-  const assignedUser = followUp.assignee ? userMap?.get(followUp.assignee) : null;
+  const assignedUser = task.assignee ? userMap?.get(task.assignee) : null;
   const assigneeDisplayName = assignedUser
     ? (assignedUser.firstName && assignedUser.lastName
         ? `${assignedUser.firstName} ${assignedUser.lastName}`
         : assignedUser.email)
-    : followUp.assignee; // Fallback to ID if user not found
+    : task.assignee; // Fallback to ID if user not found
   const assigneeInitials = assignedUser
     ? (assignedUser.firstName && assignedUser.lastName
         ? `${assignedUser.firstName[0]}${assignedUser.lastName[0]}`.toUpperCase()
         : assignedUser.email?.[0]?.toUpperCase() || "U")
-    : followUp.assignee?.substring(0, 2).toUpperCase() || "U";
+    : task.assignee?.substring(0, 2).toUpperCase() || "U";
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: followUp.id,
+    id: task.id,
     data: {
-      type: "followup",
-      followUp,
+      type: "task",
+      task,
     },
   });
 
@@ -157,7 +158,7 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, use
     
     // Only trigger edit if we didn't drag (click without significant movement)
     if (onEdit) {
-      onEdit(followUp);
+      onEdit(task);
     }
   };
 
@@ -169,13 +170,13 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, use
       {...attributes}
     >
       <Card 
-        key={followUp.id} 
+        key={task.id} 
         className={`hover-elevate transition-shadow ${
           isDragging 
             ? "cursor-grabbing shadow-lg scale-105 z-50" 
             : "cursor-grab hover:shadow-md"
         }`} 
-        data-testid={`followup-card-${followUp.id}`}
+        data-testid={`task-card-${task.id}`}
         onClick={handleCardClick}
         onMouseDown={(e) => {
           // Don't start drag if clicking on interactive elements
@@ -220,11 +221,11 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, use
             </div>
             <div className="flex-1 min-w-0">
               <CardTitle className="text-sm font-medium line-clamp-2 mb-2">
-                {followUp.title}
+                {task.title}
               </CardTitle>
               <div className="flex flex-col gap-1.5">
-                {followUp.assignee && (
-                  <div className="flex items-center gap-1.5" data-testid={`assignee-${followUp.id}`}>
+                {task.assignee && (
+                  <div className="flex items-center gap-1.5" data-testid={`assignee-${task.id}`}>
                     <Avatar className="h-5 w-5">
                       <AvatarFallback className="text-[10px] leading-none">
                         {assigneeInitials}
@@ -233,10 +234,10 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, use
                     <span className="text-xs text-muted-foreground">{assigneeDisplayName}</span>
                   </div>
                 )}
-                {followUp.dueDate && (
+                {task.dueDate && (
                   <div 
                     className="flex items-center gap-1.5" 
-                    data-testid={`due-date-${followUp.id}`}
+                    data-testid={`due-date-${task.id}`}
                   >
                     {dueDateStatus === 'past' ? (
                       <div className="relative">
@@ -257,7 +258,7 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, use
                           : 'text-muted-foreground'
                       }`}
                     >
-                      {formatDueDateText(followUp.dueDate)}
+                      {formatDueDateText(task.dueDate)}
                     </span>
                   </div>
                 )}
@@ -269,7 +270,7 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, use
                   size="icon"
                   variant="ghost"
                   className="h-6 w-6 -mr-2 -mt-1"
-                  data-testid={`button-menu-${followUp.id}`}
+                  data-testid={`button-menu-${task.id}`}
                   data-dropdown-trigger
                   onClick={(e) => {
                     e.stopPropagation();
@@ -286,12 +287,12 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, use
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
                     {statusColumns
-                      .filter((s) => s.id !== followUp.status)
+                      .filter((s) => s.id !== task.status)
                       .map((status) => (
                         <DropdownMenuItem
                           key={status.id}
-                          onClick={() => onStatusChange?.(followUp, status.id)}
-                          data-testid={`move-to-${status.id}-${followUp.id}`}
+                          onClick={() => onStatusChange?.(task, status.id)}
+                          data-testid={`move-to-${status.id}-${task.id}`}
                         >
                           {status.label}
                         </DropdownMenuItem>
@@ -299,15 +300,15 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, use
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
                 <DropdownMenuItem
-                  onClick={() => onEdit?.(followUp)}
-                  data-testid={`edit-${followUp.id}`}
+                  onClick={() => onEdit?.(task)}
+                  data-testid={`edit-${task.id}`}
                 >
                   Edit
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => onDelete?.(followUp)}
+                  onClick={() => onDelete?.(task)}
                   className="text-destructive"
-                  data-testid={`delete-${followUp.id}`}
+                  data-testid={`delete-${task.id}`}
                 >
                   Delete
                 </DropdownMenuItem>
@@ -323,17 +324,17 @@ function DraggableFollowUpCard({ followUp, onEdit, onDelete, onStatusChange, use
 // Droppable Column Component
 function DroppableColumn({ 
   column, 
-  followUps, 
+  tasks, 
   onEdit, 
   onDelete, 
   onStatusChange,
   userMap
 }: {
   column: typeof statusColumns[0];
-  followUps: FollowUp[];
-  onEdit?: (followUp: FollowUp) => void;
-  onDelete?: (followUp: FollowUp) => void;
-  onStatusChange?: (followUp: FollowUp, newStatus: string) => void;
+  tasks: Task[];
+  onEdit?: (task: Task) => void;
+  onDelete?: (task: Task) => void;
+  onStatusChange?: (task: Task, newStatus: string) => void;
   userMap?: Map<string, User>;
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -344,7 +345,7 @@ function DroppableColumn({
     },
   });
 
-  const columnFollowUps = followUps.filter((followUp) => followUp.status === column.id);
+  const columnTasks = tasks.filter((task) => task.status === column.id);
 
   return (
     <div key={column.id} className="flex flex-col gap-3">
@@ -352,7 +353,7 @@ function DroppableColumn({
         <h3 className="font-semibold text-sm flex items-center gap-2">
           {column.label}
           <Badge variant="secondary" className="text-xs">
-            {columnFollowUps.length}
+            {columnTasks.length}
           </Badge>
         </h3>
       </div>
@@ -367,17 +368,17 @@ function DroppableColumn({
         }`}
         data-testid={`column-${column.id}`}
       >
-        {columnFollowUps.map((followUp) => (
-          <DraggableFollowUpCard
-            key={followUp.id}
-            followUp={followUp}
+        {columnTasks.map((task) => (
+          <DraggableTaskCard
+            key={task.id}
+            task={task}
             onEdit={onEdit}
             onDelete={onDelete}
             onStatusChange={onStatusChange}
             userMap={userMap}
           />
         ))}
-        {columnFollowUps.length === 0 && (
+        {columnTasks.length === 0 && (
           <div className={`text-center text-sm py-8 transition-colors ${
             isOver 
               ? "text-primary font-medium" 
@@ -391,7 +392,7 @@ function DroppableColumn({
   );
 }
 
-export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange, organizationId }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, onEdit, onDelete, onStatusChange, organizationId }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   
   // Fetch organization users to map user IDs to user info
@@ -435,32 +436,32 @@ export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange, organ
 
     // Check if dropped on a column (status change)
     const newStatus = over.data.current?.status as string;
-    const followUp = active.data.current?.followUp as FollowUp;
+    const task = active.data.current?.task as Task;
 
     console.log('[Kanban] Drop details:', { 
       newStatus, 
-      currentStatus: followUp?.status,
-      followUpId: followUp?.id 
+      currentStatus: task?.status,
+      taskId: task?.id 
     });
 
     // Only update if:
     // 1. We have a valid status
     // 2. The status is different from current
-    // 3. We have a follow-up object
-    if (newStatus && followUp && newStatus !== followUp.status && onStatusChange) {
-      console.log('[Kanban] Updating status:', { from: followUp.status, to: newStatus });
-      onStatusChange(followUp, newStatus);
+    // 3. We have a task object
+    if (newStatus && task && newStatus !== task.status && onStatusChange) {
+      console.log('[Kanban] Updating status:', { from: task.status, to: newStatus });
+      onStatusChange(task, newStatus);
     } else {
       console.log('[Kanban] Status update skipped:', { 
         hasNewStatus: !!newStatus,
-        hasFollowUp: !!followUp,
-        statusChanged: newStatus !== followUp?.status,
+        hasTask: !!task,
+        statusChanged: newStatus !== task?.status,
         hasHandler: !!onStatusChange
       });
     }
   };
 
-  const activeFollowUp = activeId ? followUps.find((f) => f.id === activeId) : null;
+  const activeTask = activeId ? tasks.find((f) => f.id === activeId) : null;
 
   return (
     <DndContext
@@ -474,7 +475,7 @@ export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange, organ
           <DroppableColumn
             key={column.id}
             column={column}
-            followUps={followUps}
+            tasks={tasks}
             onEdit={onEdit}
             onDelete={onDelete}
             onStatusChange={onStatusChange}
@@ -483,26 +484,26 @@ export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange, organ
         ))}
       </div>
       <DragOverlay dropAnimation={{ duration: 200, easing: 'ease-out' }}>
-        {activeFollowUp ? (
+        {activeTask ? (
           <div className="opacity-95 rotate-2 scale-105">
             <Card className="w-64 shadow-2xl border-2 border-primary">
               <CardHeader className="p-4">
                 <CardTitle className="text-sm font-medium line-clamp-2 mb-2">
-                  {activeFollowUp.title}
+                  {activeTask.title}
                 </CardTitle>
                 <div className="flex flex-col gap-1.5">
-                  {activeFollowUp.assignee && (() => {
-                    const assignedUser = userMap.get(activeFollowUp.assignee);
+                  {activeTask.assignee && (() => {
+                    const assignedUser = userMap.get(activeTask.assignee);
                     const displayName = assignedUser
                       ? (assignedUser.firstName && assignedUser.lastName
                           ? `${assignedUser.firstName} ${assignedUser.lastName}`
                           : assignedUser.email)
-                      : activeFollowUp.assignee;
+                      : activeTask.assignee;
                     const initials = assignedUser
                       ? (assignedUser.firstName && assignedUser.lastName
                           ? `${assignedUser.firstName[0]}${assignedUser.lastName[0]}`.toUpperCase()
                           : assignedUser.email?.[0]?.toUpperCase() || "U")
-                      : activeFollowUp.assignee?.substring(0, 2).toUpperCase() || "U";
+                      : activeTask.assignee?.substring(0, 2).toUpperCase() || "U";
                     
                     return (
                       <div className="flex items-center gap-1.5">
@@ -515,10 +516,10 @@ export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange, organ
                       </div>
                     );
                   })()}
-                  {activeFollowUp.dueDate && (
+                  {activeTask.dueDate && (
                     <div className="flex items-center gap-1.5">
                       {(() => {
-                        const status = getDueDateStatus(activeFollowUp.dueDate);
+                        const status = getDueDateStatus(activeTask.dueDate);
                         return status === 'past' ? (
                           <div className="relative">
                             <Calendar className="h-3.5 w-3.5 text-red-500" />
@@ -532,14 +533,14 @@ export function KanbanBoard({ followUps, onEdit, onDelete, onStatusChange, organ
                       })()}
                       <span 
                         className={`text-xs ${
-                          getDueDateStatus(activeFollowUp.dueDate) === 'past' 
+                          getDueDateStatus(activeTask.dueDate) === 'past' 
                             ? 'text-red-600 dark:text-red-400' 
-                            : getDueDateStatus(activeFollowUp.dueDate) === 'near' 
+                            : getDueDateStatus(activeTask.dueDate) === 'near' 
                             ? 'text-orange-600 dark:text-orange-400'
                             : 'text-muted-foreground'
                         }`}
                       >
-                        {formatDueDateText(activeFollowUp.dueDate)}
+                        {formatDueDateText(activeTask.dueDate)}
                       </span>
                     </div>
                   )}

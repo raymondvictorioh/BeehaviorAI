@@ -184,8 +184,8 @@ export const insertMeetingNoteSchema = createInsertSchema(meetingNotes).omit({
 export type InsertMeetingNote = z.infer<typeof insertMeetingNoteSchema>;
 export type MeetingNote = typeof meetingNotes.$inferSelect;
 
-// Follow-ups table
-export const followUps = pgTable("follow_ups", {
+// Tasks table
+export const tasks = pgTable("follow_ups", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   studentId: varchar("student_id").notNull().references(() => students.id),
@@ -193,19 +193,19 @@ export const followUps = pgTable("follow_ups", {
   description: text("description"), // Rich text content
   dueDate: timestamp("due_date"),
   status: varchar("status", { length: 50 }).notNull().default("To-Do"), // To-Do, In-Progress, Done, Archived
-  assignee: varchar("assignee", { length: 255 }), // User assigned to this follow-up
+  assignee: varchar("assignee", { length: 255 }), // User assigned to this task
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertFollowUpSchema = createInsertSchema(followUps).omit({
+export const insertTaskSchema = createInsertSchema(tasks).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export type InsertFollowUp = z.infer<typeof insertFollowUpSchema>;
-export type FollowUp = typeof followUps.$inferSelect;
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+export type Task = typeof tasks.$inferSelect;
 
 // Student Resources table
 export const studentResources = pgTable("student_resources", {

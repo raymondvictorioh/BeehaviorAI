@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 interface DashboardStats {
   totalStudents: number;
   totalBehaviorLogs: number;
-  pendingFollowUps: number;
+  pendingTasks: number;
   positiveLogsPercentage: number;
 }
 
@@ -58,8 +58,8 @@ export default function Dashboard() {
       trend: "",
     },
     {
-      title: "Follow-ups Pending",
-      value: stats?.pendingFollowUps?.toString() || "0",
+      title: "Tasks Pending",
+      value: stats?.pendingTasks?.toString() || "0",
       icon: Clock,
       trend: "",
     },

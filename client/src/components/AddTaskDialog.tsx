@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import DOMPurify from "isomorphic-dompurify";
 import { useQuery } from "@tanstack/react-query";
-import { insertFollowUpSchema, type FollowUp, type User } from "@shared/schema";
+import { insertTaskSchema, type Task, type User } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RichTextEditor } from "./RichTextEditor";
+import { StudentSelector } from "./StudentSelector";
 
 interface OrganizationUser {
   userId: string;
@@ -37,7 +38,7 @@ interface OrganizationUser {
   role: string;
 }
 
-const formSchema = insertFollowUpSchema.extend({
+const formSchema = insertTaskSchema.extend({
   title: z.string().min(1, "Title is required"),
   status: z.enum(["To-Do", "In-Progress", "Done", "Archived"]).default("To-Do"),
 });
@@ -47,13 +48,15 @@ type FormData = z.infer<typeof formSchema>;
 // Special value to represent "no assignee" - Radix UI Select doesn't allow empty strings
 const NO_ASSIGNEE_VALUE = "__none__";
 
-interface AddFollowUpDialogProps {
+interface AddTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: FormData) => Promise<void>;
   isPending?: boolean;
-  editFollowUp?: FollowUp | null;
+  editTask?: Task | null;
   organizationId?: string;
+  showStudentSelector?: boolean;
+  preselectedStudentId?: string;
 }
 
 const statusOptions = [
@@ -63,16 +66,21 @@ const statusOptions = [
   { value: "Archived", label: "Archived" },
 ];
 
-export function AddFollowUpDialog({
+export function AddTaskDialog({
   open,
   onOpenChange,
   onSubmit,
   isPending = false,
-  editFollowUp,
+  editTask,
   organizationId,
-}: AddFollowUpDialogProps) {
+  showStudentSelector = false,
+  preselectedStudentId,
+}: AddTaskDialogProps) {
   const [description, setDescription] = useState("");
-  const isEditMode = !!editFollowUp;
+  const isEditMode = !!editTask;
+
+  // Use preselectedStudentId or editTask's studentId
+  const effectiveStudentId = preselectedStudentId || editTask?.studentId;
 
   // Fetch organization users for assignee dropdown
   const { data: organizationUsers = [], isLoading: isLoadingUsers } = useQuery<OrganizationUser[]>({
@@ -95,16 +103,16 @@ export function AddFollowUpDialog({
 
   // Populate form when editing
   useEffect(() => {
-    if (editFollowUp && open) {
-      const descriptionValue = editFollowUp.description || "";
+    if (editTask && open) {
+      const descriptionValue = editTask.description || "";
       form.reset({
-        title: editFollowUp.title || "",
+        title: editTask.title || "",
         description: descriptionValue,
-        status: (editFollowUp.status as "To-Do" | "In-Progress" | "Done" | "Archived") || "To-Do",
-        assignee: editFollowUp.assignee || NO_ASSIGNEE_VALUE,
-        dueDate: editFollowUp.dueDate ? new Date(editFollowUp.dueDate) : undefined,
-        organizationId: editFollowUp.organizationId || "",
-        studentId: editFollowUp.studentId || "",
+        status: (editTask.status as "To-Do" | "In-Progress" | "Done" | "Archived") || "To-Do",
+        assignee: editTask.assignee || NO_ASSIGNEE_VALUE,
+        dueDate: editTask.dueDate ? new Date(editTask.dueDate) : undefined,
+        organizationId: editTask.organizationId || "",
+        studentId: editTask.studentId || "",
       });
       // Set description state - this will update the RichTextEditor via content prop
       setDescription(descriptionValue);
@@ -121,7 +129,7 @@ export function AddFollowUpDialog({
       });
       setDescription("");
     }
-  }, [editFollowUp, open, form]);
+  }, [editTask, open, form]);
 
   const handleSubmit = async (data: FormData) => {
     // Sanitize HTML description to prevent XSS attacks
@@ -158,12 +166,33 @@ export function AddFollowUpDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={isEditMode ? "dialog-edit-followup" : "dialog-add-followup"}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={isEditMode ? "dialog-edit-task" : "dialog-add-task"}>
         <DialogHeader>
-          <DialogTitle>{isEditMode ? "Edit Follow-Up" : "Add Follow-Up"}</DialogTitle>
+          <DialogTitle>{isEditMode ? "Edit Task" : "Add Task"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            {showStudentSelector && !effectiveStudentId && (
+              <FormField
+                control={form.control}
+                name="studentId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Student *</FormLabel>
+                    <FormControl>
+                      <StudentSelector
+                        organizationId={organizationId || ""}
+                        value={field.value}
+                        onChange={field.onChange}
+                        required
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             <FormField
               control={form.control}
               name="title"
@@ -173,8 +202,8 @@ export function AddFollowUpDialog({
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="Enter follow-up title"
-                      data-testid="input-followup-title"
+                      placeholder="Enter task title"
+                      data-testid="input-task-title"
                     />
                   </FormControl>
                   <FormMessage />
@@ -306,12 +335,12 @@ export function AddFollowUpDialog({
                 variant="outline"
                 onClick={() => onOpenChange(false)}
                 disabled={isPending}
-                data-testid="button-cancel-followup"
+                data-testid="button-cancel-task"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isPending} data-testid="button-submit-followup">
-                {isPending ? (isEditMode ? "Updating..." : "Creating...") : (isEditMode ? "Update Follow-Up" : "Create Follow-Up")}
+              <Button type="submit" disabled={isPending} data-testid="button-submit-task">
+                {isPending ? (isEditMode ? "Updating..." : "Creating...") : (isEditMode ? "Update Task" : "Create Task")}
               </Button>
             </DialogFooter>
           </form>

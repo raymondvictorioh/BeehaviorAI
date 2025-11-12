@@ -11,7 +11,7 @@ import { AddAcademicLogDialog } from "@/components/AddAcademicLogDialog";
 import { AIInsightsPanel } from "@/components/AIInsightsPanel";
 import { MeetingNoteCard } from "@/components/MeetingNoteCard";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
-import { AddFollowUpDialog } from "@/components/AddFollowUpDialog";
+import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { AddMeetingDialog } from "@/components/AddMeetingDialog";
 import { AddStudentDialog } from "@/components/AddStudentDialog";
 import { AddResourceDialog } from "@/components/AddResourceDialog";
@@ -22,7 +22,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Student, BehaviorLog, MeetingNote, FollowUp, BehaviorLogCategory, Class, StudentResource, AcademicLog, Subject, AcademicLogCategory } from "@shared/schema";
+import type { Student, BehaviorLog, MeetingNote, Task, BehaviorLogCategory, Class, StudentResource, AcademicLog, Subject, AcademicLogCategory } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function StudentProfile() {
@@ -38,8 +38,8 @@ export default function StudentProfile() {
   const [isAddAcademicLogDialogOpen, setIsAddAcademicLogDialogOpen] = useState(false);
   const [selectedAcademicLog, setSelectedAcademicLog] = useState<any>(null);
   const [isAcademicLogDetailsOpen, setIsAcademicLogDetailsOpen] = useState(false);
-  const [isAddFollowUpDialogOpen, setIsAddFollowUpDialogOpen] = useState(false);
-  const [editFollowUp, setEditFollowUp] = useState<FollowUp | null>(null);
+  const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
+  const [editTask, setEditTask] = useState<Task | null>(null);
   const [isAddMeetingDialogOpen, setIsAddMeetingDialogOpen] = useState(false);
   const [isEditStudentDialogOpen, setIsEditStudentDialogOpen] = useState(false);
   const [isAddResourceDialogOpen, setIsAddResourceDialogOpen] = useState(false);
@@ -63,9 +63,9 @@ export default function StudentProfile() {
     enabled: !!orgId && !!studentId,
   });
 
-  // Fetch follow-ups
-  const { data: followUps = [], isLoading: isLoadingFollowUps } = useQuery<FollowUp[]>({
-    queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"],
+  // Fetch tasks
+  const { data: tasks = [], isLoading: isLoadingTasks } = useQuery<Task[]>({
+    queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"],
     enabled: !!orgId && !!studentId,
   });
 
@@ -114,7 +114,7 @@ export default function StudentProfile() {
     return map;
   }, [classes]);
 
-  const isLoading = isLoadingStudent || isLoadingLogs || isLoadingNotes || isLoadingFollowUps;
+  const isLoading = isLoadingStudent || isLoadingLogs || isLoadingNotes || isLoadingTasks;
 
   // Create behavior log mutation with optimistic updates
   const createBehaviorLog = useMutation({
@@ -330,152 +330,152 @@ export default function StudentProfile() {
     },
   });
 
-  // Create follow-up mutation with optimistic updates
-  const createFollowUp = useMutation({
+  // Create task mutation with optimistic updates
+  const createTask = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/follow-ups`, data);
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/students/${studentId}/tasks`, data);
       return await res.json();
     },
-    // Optimistic update - immediately add follow-up to UI before API call completes
-    onMutate: async (newFollowUp: any) => {
+    // Optimistic update - immediately add task to UI before API call completes
+    onMutate: async (newTask: any) => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"] });
 
       // Snapshot the previous value
-      const previousFollowUps = queryClient.getQueryData<FollowUp[]>([
+      const previousTasks = queryClient.getQueryData<Task[]>([
         "/api/organizations",
         orgId,
         "students",
         studentId,
-        "follow-ups",
+        "tasks",
       ]);
 
-      // Create temporary follow-up with optimistic data
+      // Create temporary task with optimistic data
       const tempId = `temp-${Date.now()}`;
-      const optimisticFollowUp: FollowUp = {
+      const optimisticTask: Task = {
         id: tempId,
         organizationId: orgId!,
         studentId: studentId!,
-        title: newFollowUp.title || "",
-        description: newFollowUp.description || null,
-        dueDate: newFollowUp.dueDate ? new Date(newFollowUp.dueDate) : null,
-        status: (newFollowUp.status as string) || "To-Do",
-        assignee: newFollowUp.assignee || null,
+        title: newTask.title || "",
+        description: newTask.description || null,
+        dueDate: newTask.dueDate ? new Date(newTask.dueDate) : null,
+        status: (newTask.status as string) || "To-Do",
+        assignee: newTask.assignee || null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      // Optimistically update to include the new follow-up
-      if (previousFollowUps) {
-        queryClient.setQueryData<FollowUp[]>(
-          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
-          [...previousFollowUps, optimisticFollowUp]
+      // Optimistically update to include the new task
+      if (previousTasks) {
+        queryClient.setQueryData<Task[]>(
+          ["/api/organizations", orgId, "students", studentId, "tasks"],
+          [...previousTasks, optimisticTask]
         );
       } else {
-        queryClient.setQueryData<FollowUp[]>(
-          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
-          [optimisticFollowUp]
+        queryClient.setQueryData<Task[]>(
+          ["/api/organizations", orgId, "students", studentId, "tasks"],
+          [optimisticTask]
         );
       }
 
       // Return context with previous data and temp ID for rollback/replacement
-      return { previousFollowUps, tempId };
+      return { previousTasks, tempId };
     },
-    // On success, replace temporary follow-up with real one from server
-    onSuccess: (data: FollowUp, _variables, context) => {
-      const previousFollowUps = queryClient.getQueryData<FollowUp[]>([
+    // On success, replace temporary task with real one from server
+    onSuccess: (data: Task, _variables, context) => {
+      const previousTasks = queryClient.getQueryData<Task[]>([
         "/api/organizations",
         orgId,
         "students",
         studentId,
-        "follow-ups",
+        "tasks",
       ]);
 
-      if (previousFollowUps && context?.tempId) {
-        // Replace temporary follow-up with the real one from server
-        queryClient.setQueryData<FollowUp[]>(
-          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
-          previousFollowUps.map((followUp) =>
-            followUp.id === context.tempId ? data : followUp
+      if (previousTasks && context?.tempId) {
+        // Replace temporary task with the real one from server
+        queryClient.setQueryData<Task[]>(
+          ["/api/organizations", orgId, "students", studentId, "tasks"],
+          previousTasks.map((task) =>
+            task.id === context.tempId ? data : task
           )
         );
       }
 
       toast({
-        title: "Follow-up created",
-        description: "The follow-up has been successfully created.",
+        title: "Task created",
+        description: "The task has been successfully created.",
       });
     },
     // On error, roll back to the previous value
     onError: (error: Error, _variables, context) => {
-      if (context?.previousFollowUps) {
-        queryClient.setQueryData<FollowUp[]>(
-          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
-          context.previousFollowUps
+      if (context?.previousTasks) {
+        queryClient.setQueryData<Task[]>(
+          ["/api/organizations", orgId, "students", studentId, "tasks"],
+          context.previousTasks
         );
       }
       toast({
         title: "Error",
-        description: error.message || "Failed to create follow-up. Please try again.",
+        description: error.message || "Failed to create task. Please try again.",
         variant: "destructive",
       });
     },
     // Always refetch after error or success to ensure we have the latest data
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"] });
     },
   });
 
-  // Update follow-up mutation with optimistic updates
-  const updateFollowUp = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<FollowUp> }) => {
-      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/follow-ups/${id}`, updates);
+  // Update task mutation with optimistic updates
+  const updateTask = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Task> }) => {
+      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/tasks/${id}`, updates);
       return await res.json();
     },
     // Optimistic update - immediately update UI before API call completes
     onMutate: async ({ id, updates }) => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"] });
 
       // Snapshot the previous value
-      const previousFollowUps = queryClient.getQueryData<FollowUp[]>([
+      const previousTasks = queryClient.getQueryData<Task[]>([
         "/api/organizations",
         orgId,
         "students",
         studentId,
-        "follow-ups",
+        "tasks",
       ]);
 
       // Optimistically update to the new value
-      if (previousFollowUps) {
-        queryClient.setQueryData<FollowUp[]>(
-          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
-          previousFollowUps.map((followUp) =>
-            followUp.id === id ? { ...followUp, ...updates } : followUp
+      if (previousTasks) {
+        queryClient.setQueryData<Task[]>(
+          ["/api/organizations", orgId, "students", studentId, "tasks"],
+          previousTasks.map((task) =>
+            task.id === id ? { ...task, ...updates } : task
           )
         );
       }
 
       // Return a context object with the snapshotted value
-      return { previousFollowUps };
+      return { previousTasks };
     },
     // On error, roll back to the previous value
     onError: (error: Error, _variables, context) => {
-      if (context?.previousFollowUps) {
-        queryClient.setQueryData<FollowUp[]>(
-          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
-          context.previousFollowUps
+      if (context?.previousTasks) {
+        queryClient.setQueryData<Task[]>(
+          ["/api/organizations", orgId, "students", studentId, "tasks"],
+          context.previousTasks
         );
       }
       toast({
         title: "Error",
-        description: error.message || "Failed to update follow-up. Please try again.",
+        description: error.message || "Failed to update task. Please try again.",
         variant: "destructive",
       });
     },
     // Always refetch after error or success to ensure we have the latest data
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"] });
     },
   });
 
@@ -562,54 +562,54 @@ export default function StudentProfile() {
     },
   });
 
-  // Delete follow-up mutation with optimistic updates
-  const deleteFollowUp = useMutation({
+  // Delete task mutation with optimistic updates
+  const deleteTask = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/organizations/${orgId}/follow-ups/${id}`);
+      await apiRequest("DELETE", `/api/organizations/${orgId}/tasks/${id}`);
       return id;
     },
     // Optimistic update - immediately remove from UI
     onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"] });
 
-      const previousFollowUps = queryClient.getQueryData<FollowUp[]>([
+      const previousTasks = queryClient.getQueryData<Task[]>([
         "/api/organizations",
         orgId,
         "students",
         studentId,
-        "follow-ups",
+        "tasks",
       ]);
 
-      if (previousFollowUps) {
-        queryClient.setQueryData<FollowUp[]>(
-          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
-          previousFollowUps.filter((followUp) => followUp.id !== id)
+      if (previousTasks) {
+        queryClient.setQueryData<Task[]>(
+          ["/api/organizations", orgId, "students", studentId, "tasks"],
+          previousTasks.filter((task) => task.id !== id)
         );
       }
 
-      return { previousFollowUps };
+      return { previousTasks };
     },
     onSuccess: () => {
       toast({
-        title: "Follow-up deleted",
-        description: "The follow-up has been successfully deleted.",
+        title: "Task deleted",
+        description: "The task has been successfully deleted.",
       });
     },
     onError: (error: Error, _variables, context) => {
-      if (context?.previousFollowUps) {
-        queryClient.setQueryData<FollowUp[]>(
-          ["/api/organizations", orgId, "students", studentId, "follow-ups"],
-          context.previousFollowUps
+      if (context?.previousTasks) {
+        queryClient.setQueryData<Task[]>(
+          ["/api/organizations", orgId, "students", studentId, "tasks"],
+          context.previousTasks
         );
       }
       toast({
         title: "Error",
-        description: error.message || "Failed to delete follow-up. Please try again.",
+        description: error.message || "Failed to delete task. Please try again.",
         variant: "destructive",
       });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "follow-ups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"] });
     },
   });
 
@@ -1188,7 +1188,7 @@ export default function StudentProfile() {
         <TabsList className="grid w-full grid-cols-4 max-w-2xl">
           <TabsTrigger value="logs" data-testid="tab-logs">Behavior Logs</TabsTrigger>
           <TabsTrigger value="academic" data-testid="tab-academic">Academic Logs</TabsTrigger>
-          <TabsTrigger value="followups" data-testid="tab-followups">Follow-ups</TabsTrigger>
+          <TabsTrigger value="tasks" data-testid="tab-tasks">Tasks</TabsTrigger>
           <TabsTrigger value="meetings" data-testid="tab-meetings">Meeting Notes</TabsTrigger>
         </TabsList>
 
@@ -1281,62 +1281,62 @@ export default function StudentProfile() {
           </div>
         </TabsContent>
 
-        <TabsContent value="followups" className="space-y-4 mt-6">
+        <TabsContent value="tasks" className="space-y-4 mt-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Follow-up Points</h2>
+            <h2 className="text-xl font-semibold">Tasks</h2>
             <Button 
               onClick={() => {
-                setEditFollowUp(null); // Clear any edit state
-                setIsAddFollowUpDialogOpen(true);
+                setEditTask(null); // Clear any edit state
+                setIsAddTaskDialogOpen(true);
               }}
               data-testid="button-add-followup"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Add Follow-up
+              Add Task
             </Button>
           </div>
-          {followUps.length === 0 ? (
+          {tasks.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <p className="text-muted-foreground text-center max-w-md mb-4">
-                  No follow-up tasks yet. Add follow-ups to track action items for this student.
+                  No task tasks yet. Add tasks to track action items for this student.
                 </p>
                 <Button 
                   onClick={() => {
-                    setEditFollowUp(null); // Clear any edit state
-                    setIsAddFollowUpDialogOpen(true);
+                    setEditTask(null); // Clear any edit state
+                    setIsAddTaskDialogOpen(true);
                   }}
                   data-testid="button-add-first-followup"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Add First Follow-up
+                  Add First Task
                 </Button>
               </CardContent>
             </Card>
           ) : (
             <KanbanBoard
-              followUps={followUps}
+              tasks={tasks}
               organizationId={orgId}
-              onStatusChange={(followUp, newStatus) => {
-                // Send the full follow-up payload with updated status
+              onStatusChange={(task, newStatus) => {
+                // Send the full task payload with updated status
                 // This ensures all fields are included and prevents null constraint violations
-                updateFollowUp.mutate({
-                  id: followUp.id,
+                updateTask.mutate({
+                  id: task.id,
                   updates: {
-                    title: followUp.title,
-                    description: followUp.description || null,
+                    title: task.title,
+                    description: task.description || null,
                     status: newStatus,
-                    assignee: followUp.assignee || null,
-                    dueDate: followUp.dueDate || null,
+                    assignee: task.assignee || null,
+                    dueDate: task.dueDate || null,
                   },
                 });
               }}
-              onEdit={(followUp) => {
-                setEditFollowUp(followUp);
-                setIsAddFollowUpDialogOpen(true);
+              onEdit={(task) => {
+                setEditTask(task);
+                setIsAddTaskDialogOpen(true);
               }}
-              onDelete={(followUp) => {
-                deleteFollowUp.mutate(followUp.id);
+              onDelete={(task) => {
+                deleteTask.mutate(task.id);
               }}
             />
           )}
@@ -1396,29 +1396,29 @@ export default function StudentProfile() {
         onDelete={handleDeleteLog}
       />
 
-      <AddFollowUpDialog
-        open={isAddFollowUpDialogOpen}
+      <AddTaskDialog
+        open={isAddTaskDialogOpen}
         organizationId={orgId}
         onOpenChange={(open) => {
-          setIsAddFollowUpDialogOpen(open);
+          setIsAddTaskDialogOpen(open);
           if (!open) {
-            setEditFollowUp(null); // Clear edit state when dialog closes
+            setEditTask(null); // Clear edit state when dialog closes
           }
         }}
         onSubmit={async (data) => {
-          if (editFollowUp) {
-            // Edit mode - update existing follow-up
-            updateFollowUp.mutate({
-              id: editFollowUp.id,
+          if (editTask) {
+            // Edit mode - update existing task
+            updateTask.mutate({
+              id: editTask.id,
               updates: data,
             });
           } else {
-            // Create mode - create new follow-up
-            createFollowUp.mutate(data);
+            // Create mode - create new task
+            createTask.mutate(data);
           }
         }}
-        isPending={editFollowUp ? updateFollowUp.isPending : createFollowUp.isPending}
-        editFollowUp={editFollowUp}
+        isPending={editTask ? updateTask.isPending : createTask.isPending}
+        editTask={editTask}
       />
 
       <AddMeetingDialog

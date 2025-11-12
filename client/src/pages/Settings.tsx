@@ -1192,7 +1192,7 @@ export default function Settings() {
             <CardHeader>
               <CardTitle>Notification Settings</CardTitle>
               <CardDescription>
-                Configure email notifications for behavior logs and follow-ups
+                Configure email notifications for behavior logs and tasks
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1218,12 +1218,12 @@ export default function Settings() {
 
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label htmlFor="notify-followup">Follow-up Reminders</Label>
+                  <Label htmlFor="notify-task">Task Reminders</Label>
                   <p className="text-sm text-muted-foreground">
-                    Receive reminders for upcoming follow-up tasks
+                    Receive reminders for upcoming tasks
                   </p>
                 </div>
-                <Switch id="notify-followup" defaultChecked data-testid="switch-notify-followup" />
+                <Switch id="notify-task" defaultChecked data-testid="switch-notify-task" />
               </div>
 
               <div className="flex items-center justify-between">
