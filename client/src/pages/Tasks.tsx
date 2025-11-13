@@ -53,6 +53,7 @@ export default function Tasks() {
       return data;
     },
     enabled: !!orgId,
+    refetchOnMount: true, // Always refetch when component mounts
   });
 
   // Fetch students for filter

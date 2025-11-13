@@ -84,6 +84,7 @@ export default function BehaviorLogs() {
   const { data: behaviorLogs = [], isLoading: logsLoading } = useQuery<BehaviorLog[]>({
     queryKey: ["/api/organizations", orgId, "behavior-logs"],
     enabled: !!orgId,
+    refetchOnMount: true, // Always refetch when component mounts
   });
 
   // Fetch categories
@@ -138,8 +139,16 @@ export default function BehaviorLogs() {
         variant: "destructive",
       });
     },
-    onSettled: () => {
+    onSettled: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
+      // Invalidate student-specific query if we can find the log
+      if (variables && typeof variables === 'object' && 'id' in variables) {
+        const logs = queryClient.getQueryData(["/api/organizations", orgId, "behavior-logs"]) as any[];
+        const log = logs?.find((l) => l.id === variables.id);
+        if (log?.studentId) {
+          queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", log.studentId, "behavior-logs"] });
+        }
+      }
     },
   });
 
@@ -177,8 +186,16 @@ export default function BehaviorLogs() {
         variant: "destructive",
       });
     },
-    onSettled: () => {
+    onSettled: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
+      // Invalidate student-specific query if we can find the log
+      if (typeof variables === 'string') {
+        const logs = queryClient.getQueryData(["/api/organizations", orgId, "behavior-logs"]) as any[];
+        const log = logs?.find((l) => l.id === variables);
+        if (log?.studentId) {
+          queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", log.studentId, "behavior-logs"] });
+        }
+      }
     },
   });
 
@@ -256,8 +273,12 @@ export default function BehaviorLogs() {
         variant: "destructive",
       });
     },
-    onSettled: () => {
+    onSettled: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
+      // Invalidate student-specific query
+      if (variables && typeof variables === 'object' && 'studentId' in variables && variables.studentId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", variables.studentId, "behavior-logs"] });
+      }
     },
   });
 

@@ -215,6 +215,7 @@ export default function StudentProfile() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
     },
   });
 
@@ -273,6 +274,7 @@ export default function StudentProfile() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
     },
   });
 
@@ -329,6 +331,7 @@ export default function StudentProfile() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
     },
   });
 
@@ -425,6 +428,7 @@ export default function StudentProfile() {
     // Always refetch after error or success to ensure we have the latest data
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "tasks"] });
     },
   });
 
@@ -478,6 +482,7 @@ export default function StudentProfile() {
     // Always refetch after error or success to ensure we have the latest data
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "tasks"] });
     },
   });
 
@@ -612,6 +617,7 @@ export default function StudentProfile() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "tasks"] });
     },
   });
 
@@ -865,6 +871,7 @@ export default function StudentProfile() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-logs"] });
     },
   });
 
@@ -922,6 +929,7 @@ export default function StudentProfile() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-logs"] });
     },
   });
 
@@ -977,6 +985,7 @@ export default function StudentProfile() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "academic-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-logs"] });
     },
   });
 

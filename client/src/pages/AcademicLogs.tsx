@@ -57,6 +57,7 @@ export default function AcademicLogs() {
   const { data: academicLogs = [], isLoading: logsLoading } = useQuery<AcademicLog[]>({
     queryKey: ["/api/organizations", orgId, "academic-logs"],
     enabled: !!orgId,
+    refetchOnMount: true, // Always refetch when component mounts
   });
 
   // Fetch subjects
@@ -117,8 +118,14 @@ export default function AcademicLogs() {
         variant: "destructive",
       });
     },
-    onSettled: () => {
+    onSettled: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-logs"] });
+      // Invalidate student-specific query if we can find the log
+      const logs = queryClient.getQueryData(["/api/organizations", orgId, "academic-logs"]) as any[];
+      const log = logs?.find((l) => l.id === variables.id);
+      if (log?.studentId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", log.studentId, "academic-logs"] });
+      }
     },
   });
 
@@ -156,8 +163,14 @@ export default function AcademicLogs() {
         variant: "destructive",
       });
     },
-    onSettled: () => {
+    onSettled: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-logs"] });
+      // Invalidate student-specific query if we can find the log
+      const logs = queryClient.getQueryData(["/api/organizations", orgId, "academic-logs"]) as any[];
+      const log = logs?.find((l) => l.id === variables);
+      if (log?.studentId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", log.studentId, "academic-logs"] });
+      }
     },
   });
 
@@ -252,8 +265,12 @@ export default function AcademicLogs() {
         variant: "destructive",
       });
     },
-    onSettled: () => {
+    onSettled: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-logs"] });
+      // Invalidate student-specific query
+      if (variables.studentId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", variables.studentId, "academic-logs"] });
+      }
     },
   });
 
