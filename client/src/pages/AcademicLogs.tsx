@@ -12,6 +12,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { columns, type AcademicLog } from "@/components/academic-logs/columns";
 import { DataTableToolbar } from "@/components/academic-logs/data-table-toolbar";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { BeeLoader } from "@/components/shared/BeeLoader";
 
 type AcademicCategory = {
   id: string;
@@ -323,21 +324,39 @@ export default function AcademicLogs() {
     });
   };
 
-  if (logsLoading) {
-    return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading academic logs...</p>
-          </div>
+  // Skeleton loader component
+  const AcademicLogsSkeleton = () => (
+    <div className="flex h-full flex-1 flex-col space-y-8 p-8">
+      {/* Page Header Skeleton */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="h-8 w-48 bg-muted animate-pulse rounded mb-2" />
+          <div className="h-4 w-96 bg-muted animate-pulse rounded" />
         </div>
+        <div className="h-10 w-32 bg-muted animate-pulse rounded" />
       </div>
-    );
-  }
+
+      {/* Toolbar Skeleton */}
+      <div className="flex items-center gap-4 bg-card border rounded-md p-4">
+        <div className="h-8 w-64 bg-muted animate-pulse rounded" />
+        <div className="h-8 w-40 bg-muted animate-pulse rounded" />
+        <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+        <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+      </div>
+
+      {/* Table Skeleton */}
+      <div className="rounded-md border bg-card">
+        <div className="h-12 bg-muted/50 animate-pulse rounded-t-md border-b" />
+        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <div key={i} className="h-16 border-b last:border-0 bg-muted/30 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex h-full flex-1 flex-col space-y-8 p-8">
+    <BeeLoader isLoading={logsLoading} skeleton={<AcademicLogsSkeleton />}>
+      <div className="flex h-full flex-1 flex-col space-y-8 p-8">
       <PageHeader
         title="Academic Logs"
         description="View and manage all academic logs across your organization"
@@ -388,6 +407,7 @@ export default function AcademicLogs() {
         categories={categories}
         students={students}
       />
-    </div>
+      </div>
+    </BeeLoader>
   );
 }

@@ -3,6 +3,7 @@ import { Users, FileText, TrendingUp, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { BeeLoader } from "@/components/shared/BeeLoader";
 
 interface DashboardStats {
   totalStudents: number;
@@ -72,12 +73,9 @@ export default function Dashboard() {
     },
   ];
 
-  if (isLoading) {
-    return <DashboardSkeleton />;
-  }
-
   return (
-    <div className="p-6 space-y-6">
+    <BeeLoader isLoading={isLoading} skeleton={<DashboardSkeleton />}>
+      <div className="p-6 space-y-6">
       <PageHeader
         title="Dashboard"
         description="Overview of student behavior management activities"
@@ -113,6 +111,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </BeeLoader>
   );
 }

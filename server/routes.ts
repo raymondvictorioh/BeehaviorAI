@@ -3,7 +3,6 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, checkOrganizationAccess, supabase } from "./supabaseAuth";
 import { getChatCompletion, transcribeAudio, generateMeetingSummary } from "./openai";
-import { createHandler } from "./utils/routeFactory";
 import { asyncHandler } from "./middleware/asyncHandler";
 import { validate } from "./middleware/validate";
 import {
@@ -334,35 +333,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Student routes
-  // ========================================
-  // REFACTORED ROUTES USING NEW PATTERN
-  // ========================================
+  app.get("/api/organizations/:orgId/students", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const students = await storage.getStudents(orgId);
+      res.json(students);
+    } catch (error) {
+      console.error("Error fetching students:", error);
+      res.status(500).json({ message: "Failed to fetch students" });
+    }
+  });
 
-  // GET /api/organizations/:orgId/students
-  // Before: 13 lines | After: 5 lines (61% reduction)
-  app.get(
-    "/api/organizations/:orgId/students",
-    isAuthenticated,
-    checkOrganizationAccess,
-    createHandler({
-      storage: ({ orgId }) => storage.getStudents(orgId!),
-    })
-  );
-
-  // GET /api/organizations/:orgId/students/:id
-  // Before: 15 lines | After: 5 lines (67% reduction)
-  app.get(
-    "/api/organizations/:orgId/students/:id",
-    isAuthenticated,
-    checkOrganizationAccess,
-    createHandler({
-      storage: ({ orgId, id }) => storage.getStudent(id!, orgId!),
-    })
-  );
-
-  // ========================================
-  // OLD PATTERN ROUTES (TO BE MIGRATED)
-  // ========================================
+  app.get("/api/organizations/:orgId/students/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const student = await storage.getStudent(id, orgId);
+      if (!student) {
+        return res.status(404).json({ message: "Student not found" });
+      }
+      res.json(student);
+    } catch (error) {
+      console.error("Error fetching student:", error);
+      res.status(500).json({ message: "Failed to fetch student" });
+    }
+  });
 
   app.post("/api/organizations/:orgId/students", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
@@ -582,16 +576,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Behavior Log Category routes
-  // GET /api/organizations/:orgId/categories
-  // Before: 13 lines | After: 5 lines (61% reduction)
-  app.get(
-    "/api/organizations/:orgId/categories",
-    isAuthenticated,
-    checkOrganizationAccess,
-    createHandler({
-      storage: ({ orgId }) => storage.getBehaviorLogCategories(orgId!),
-    })
-  );
+  app.get("/api/organizations/:orgId/categories", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const categories = await storage.getBehaviorLogCategories(orgId);
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ message: "Failed to fetch categories" });
+    }
+  });
 
   app.post("/api/organizations/:orgId/categories", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
@@ -634,27 +628,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Tasks routes
   // Get all tasks for organization (with student data)
-  // GET /api/organizations/:orgId/tasks
-  // Before: 19 lines (with debug logs) | After: 5 lines (74% reduction)
-  app.get(
-    "/api/organizations/:orgId/tasks",
-    isAuthenticated,
-    checkOrganizationAccess,
-    createHandler({
-      storage: ({ orgId }) => storage.getAllTasksWithStudents(orgId!),
-    })
-  );
+  app.get("/api/organizations/:orgId/tasks", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const tasks = await storage.getAllTasksWithStudents(orgId);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+      res.status(500).json({ message: "Failed to fetch tasks" });
+    }
+  });
 
-  // GET /api/organizations/:orgId/students/:studentId/tasks
-  // Before: 13 lines | After: 5 lines (61% reduction)
-  app.get(
-    "/api/organizations/:orgId/students/:studentId/tasks",
-    isAuthenticated,
-    checkOrganizationAccess,
-    createHandler({
-      storage: ({ orgId, studentId }) => storage.getTasks(studentId!, orgId!),
-    })
-  );
+  app.get("/api/organizations/:orgId/students/:studentId/tasks", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, studentId } = req.params;
+      const tasks = await storage.getTasks(studentId, orgId);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching student tasks:", error);
+      res.status(500).json({ message: "Failed to fetch student tasks" });
+    }
+  });
 
   app.post("/api/organizations/:orgId/students/:studentId/tasks", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {

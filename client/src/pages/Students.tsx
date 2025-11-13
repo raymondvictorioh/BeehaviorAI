@@ -4,12 +4,20 @@ import { AddStudentDialog } from "@/components/AddStudentDialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Plus } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import type { Student, Class } from "@shared/schema";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SearchInput } from "@/components/shared/SearchInput";
+import { BeeLoader } from "@/components/shared/BeeLoader";
 
 // Skeleton loader for students page
 function StudentsSkeleton() {
@@ -36,6 +44,7 @@ export default function Students() {
   const [, setLocation] = useLocation();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedClass, setSelectedClass] = useState<string>("all");
   const { user } = useAuth();
 
   const orgId = user?.organizations?.[0]?.id;
@@ -59,16 +68,15 @@ export default function Students() {
     return map;
   }, [classes]);
 
-  const filteredStudents = students.filter((student) =>
-    student.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  if (isLoading) {
-    return <StudentsSkeleton />;
-  }
+  const filteredStudents = students.filter((student) => {
+    const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesClass = selectedClass === "all" || student.classId === selectedClass;
+    return matchesSearch && matchesClass;
+  });
 
   return (
-    <div className="p-6 space-y-6">
+    <BeeLoader isLoading={isLoading} skeleton={<StudentsSkeleton />}>
+      <div className="p-6 space-y-6">
       <PageHeader
         title="Students"
         description="Manage student profiles and behavior records"
@@ -80,12 +88,30 @@ export default function Students() {
         }
       />
 
-      <SearchInput
-        value={searchQuery}
-        onChange={setSearchQuery}
-        placeholder="Search students..."
-        testId="input-search-students"
-      />
+      <div className="flex items-center gap-4">
+        <SearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search students..."
+          testId="input-search-students"
+          className="flex-1 max-w-sm"
+        />
+        {classes.length > 0 && (
+          <Select value={selectedClass} onValueChange={setSelectedClass}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All Classes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Classes</SelectItem>
+              {classes.map((cls) => (
+                <SelectItem key={cls.id} value={cls.id}>
+                  {cls.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
 
       {filteredStudents.length === 0 && searchQuery === "" ? (
         <div className="text-center py-12">
@@ -128,6 +154,7 @@ export default function Students() {
           organizationId={orgId}
         />
       )}
-    </div>
+      </div>
+    </BeeLoader>
   );
 }

@@ -120,7 +120,7 @@ export function AcademicLogDetailsSheet({
             <div className="flex items-center gap-2 flex-wrap">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground" data-testid="text-detail-assessment-date">
-                Assessment: {formatDate(log.assessmentDate)}
+                Assessment: {formatDateOnly(log.assessmentDate)}
               </span>
               <Badge variant="outline" className="text-xs" data-testid="badge-detail-subject">
                 <BookOpen className="h-3 w-3 mr-1" />

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BehaviorLogEntry } from "@/components/BehaviorLogEntry";
 import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
@@ -16,6 +16,7 @@ import { AddMeetingDialog } from "@/components/AddMeetingDialog";
 import { AddStudentDialog } from "@/components/AddStudentDialog";
 import { AddResourceDialog } from "@/components/AddResourceDialog";
 import { KanbanBoard } from "@/components/KanbanBoard";
+import { BeeLoader } from "@/components/shared/BeeLoader";
 import { ArrowLeft, Plus, Mail, GraduationCap, Edit, Link, ExternalLink, X } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -114,6 +115,7 @@ export default function StudentProfile() {
     return map;
   }, [classes]);
 
+  // Combine loading states (don't include !student to allow "not found" state)
   const isLoading = isLoadingStudent || isLoadingLogs || isLoadingNotes || isLoadingTasks;
 
   // Create behavior log mutation with optimistic updates
@@ -1044,18 +1046,63 @@ export default function StudentProfile() {
     return "ST";
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading student profile...</p>
+  // Skeleton loader component
+  const StudentProfileSkeleton = () => (
+    <div className="p-6 space-y-6">
+      {/* Back button skeleton */}
+      <div className="h-10 w-32 bg-muted animate-pulse rounded" />
+
+      {/* Student Profile + AI Insights Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-start gap-6">
+                <div className="h-24 w-24 rounded-full bg-muted animate-pulse" />
+                <div className="flex-1 space-y-4">
+                  <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+                  <div className="h-5 w-64 bg-muted animate-pulse rounded" />
+                  <div className="h-5 w-64 bg-muted animate-pulse rounded" />
+                </div>
+                <div className="h-10 w-10 bg-muted animate-pulse rounded" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        <div>
+          <Card>
+            <CardHeader>
+              <div className="h-6 w-32 bg-muted animate-pulse rounded" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-16 bg-muted animate-pulse rounded" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    );
-  }
 
-  if (!student) {
+      {/* Tabs skeleton */}
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-10 w-32 bg-muted animate-pulse rounded" />
+          ))}
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 bg-muted animate-pulse rounded" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Handle missing student state (only after loading is complete)
+  if (!student && !isLoadingStudent && !isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
@@ -1071,8 +1118,18 @@ export default function StudentProfile() {
     );
   }
 
+  // Type guard: ensure student exists before rendering
+  if (!student) {
+    return (
+      <BeeLoader isLoading={true} skeleton={<StudentProfileSkeleton />}>
+        <div></div>
+      </BeeLoader>
+    );
+  }
+
   return (
-    <div className="p-6 space-y-6">
+    <BeeLoader isLoading={isLoading} skeleton={<StudentProfileSkeleton />}>
+      <div className="p-6 space-y-6">
       <Button
         variant="ghost"
         onClick={() => setLocation("/students")}
@@ -1463,6 +1520,7 @@ export default function StudentProfile() {
         onUpdateNotes={handleUpdateAcademicNotes}
         onDelete={handleDeleteAcademicLog}
       />
-    </div>
+      </div>
+    </BeeLoader>
   );
 }

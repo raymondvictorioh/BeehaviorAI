@@ -5,13 +5,15 @@ import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { List, Plus, Users, ClipboardList, BookOpen, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/ui/data-table";
 import { CreateListDialog } from "@/components/CreateListDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { BeeLoader } from "@/components/shared/BeeLoader";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   AlertDialog,
@@ -304,43 +306,61 @@ export default function Lists() {
     setLocation(`/lists/${row.id}`);
   };
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading lists...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
+  // Skeleton loader component
+  const ListsSkeleton = () => (
     <div className="flex h-full flex-1 flex-col space-y-8 p-8">
-      <div className="flex items-center justify-between space-y-2">
+      {/* Page Header Skeleton */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <div className="flex items-center gap-2">
-            <List className="h-6 w-6 text-primary" />
-            <h2 className="text-2xl font-bold tracking-tight">Lists</h2>
-          </div>
-          <p className="text-muted-foreground">
-            Organize students, behavior logs, and academic logs into custom collections
-          </p>
+          <div className="h-8 w-48 bg-muted animate-pulse rounded mb-2" />
+          <div className="h-4 w-96 bg-muted animate-pulse rounded" />
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create List
-        </Button>
+        <div className="h-10 w-32 bg-muted animate-pulse rounded" />
       </div>
 
       <div className="space-y-4">
-        <Input
-          placeholder="Search lists..."
+        {/* Search Input Skeleton */}
+        <div className="h-10 w-full max-w-sm bg-muted animate-pulse rounded" />
+
+        {/* Tabs Skeleton */}
+        <div className="flex gap-2">
+          <div className="h-10 w-32 bg-muted animate-pulse rounded" />
+          <div className="h-10 w-32 bg-muted animate-pulse rounded" />
+          <div className="h-10 w-40 bg-muted animate-pulse rounded" />
+        </div>
+
+        {/* DataTable Skeleton */}
+        <div className="rounded-md border bg-card mt-6">
+          <div className="h-12 bg-muted/50 animate-pulse rounded-t-md border-b" />
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-16 border-b last:border-0 bg-muted/30 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <BeeLoader isLoading={isLoading} skeleton={<ListsSkeleton />}>
+      <div className="flex h-full flex-1 flex-col space-y-8 p-8">
+      <PageHeader
+        title="Lists"
+        description="Organize students, behavior logs, and academic logs into custom collections"
+        action={
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create List
+          </Button>
+        }
+      />
+
+      <div className="space-y-4">
+        <SearchInput
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-sm bg-card"
+          onChange={setSearchQuery}
+          placeholder="Search lists..."
+          testId="input-search-lists"
+          className="max-w-sm"
         />
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
@@ -413,6 +433,7 @@ export default function Lists() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+      </div>
+    </BeeLoader>
   );
 }

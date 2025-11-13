@@ -606,7 +606,391 @@ npm test -- routeFactory    # Test route factory (26 tests)
 - `server/middleware/__tests__/validate.test.ts`
 - `server/utils/__tests__/routeFactory.test.ts`
 
-### 3. Naming Conventions
+### 3. Search and Filter Patterns (NEW - November 2025)
+
+**BeehaviorAI uses a standardized search and filter pattern across all table-based pages for consistency and better UX.**
+
+#### The Standard Pattern: DataTableToolbar
+
+All pages with tabular data use the **DataTableToolbar** pattern, which provides:
+- Integrated search across multiple columns
+- Multi-select faceted filters (categories, classes, subjects, status, students)
+- Date range filtering (from/to dates)
+- Reset button to clear all filters
+- View toggles (for pages that support multiple views like table/kanban)
+
+#### Pattern Structure
+
+```typescript
+// 1. State management for date filters (manual filtering)
+const [fromDate, setFromDate] = useState<Date | undefined>();
+const [toDate, setToDate] = useState<Date | undefined>();
+
+// 2. Manual date filtering (pre-filter data before DataTable)
+const filteredData = useMemo(() => {
+  return rawData.filter((item) => {
+    const date = new Date(item.dateField);
+
+    if (fromDate && date < fromDate) return false;
+
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      if (date > endOfDay) return false;
+    }
+
+    return true;
+  });
+}, [rawData, fromDate, toDate]);
+
+// 3. DataTable with toolbar parameter
+<DataTable
+  columns={columns}
+  data={filteredData}  // Pre-filtered by date
+  onRowClick={handleRowClick}
+  initialSorting={[{ id: "dateField", desc: true }]}
+  toolbar={(table) => (
+    <DataTableToolbar
+      table={table}  // TanStack Table instance for column filters
+      categories={categories}
+      classes={classes}
+      fromDate={fromDate}
+      toDate={toDate}
+      onFromDateChange={setFromDate}
+      onToDateChange={setToDate}
+    />
+  )}
+/>
+```
+
+#### Why Two Filter Systems?
+
+BeehaviorAI uses a **dual filtering approach**:
+
+1. **Column Filters (via TanStack Table):**
+   - Categories, classes, subjects, status, students
+   - Multi-select faceted filters
+   - Search input across text columns
+   - Managed by TanStack Table state
+
+2. **Manual Date Filters (state-based):**
+   - Date range filtering (from/to)
+   - Requires custom logic (comparing date ranges, not equality)
+   - Pre-filters data before passing to DataTable
+   - State managed in page component
+
+**Filtering Flow:**
+```
+Raw Data → Manual Date Filter → DataTable → Column Filters → Displayed Data
+```
+
+#### Component Files
+
+Each feature with search/filter creates two files:
+
+1. **`components/{feature}/data-table-toolbar.tsx`**
+   - Contains filter UI (search, date range, faceted filters, reset button)
+   - Receives `table` prop from TanStack Table
+   - Receives date state and handlers as props
+
+2. **`components/{feature}/columns.tsx`**
+   - Defines table columns with `filterFn` for each filterable column
+   - Exports column definitions
+   - Includes cell rendering and sorting logic
+
+#### Column Definition Requirements
+
+For columns to be filterable, they must include a `filterFn`:
+
+```typescript
+{
+  accessorKey: "categoryId",
+  id: "categoryId",
+  header: "Category",
+  cell: ({ row }) => {
+    // Render cell
+  },
+  filterFn: (row, id, value: string[]) => {
+    // For multi-select faceted filters
+    return value.includes(row.getValue(id));
+  },
+}
+
+{
+  accessorKey: "notes",
+  id: "notes",
+  header: "Notes",
+  cell: ({ row }) => {
+    // Render cell
+  },
+  filterFn: (row, id, value: string) => {
+    // For text search
+    const notes = row.getValue(id) as string;
+    return notes.toLowerCase().includes(value.toLowerCase());
+  },
+}
+```
+
+#### Example: BehaviorLogs Pattern
+
+**File: `components/behavior-logs/data-table-toolbar.tsx`**
+```typescript
+import { Table } from "@tanstack/react-table";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { DataTableFacetedFilter } from "@/components/ui/data-table-faceted-filter";
+import { DataTableDateRangeFilter } from "@/components/ui/data-table-date-range-filter";
+
+interface DataTableToolbarProps<TData> {
+  table: Table<TData>;
+  categories: Array<{ id: string; name: string; color: string | null }>;
+  classes: Array<{ id: string; name: string }>;
+  fromDate?: Date;
+  toDate?: Date;
+  onFromDateChange?: (date: Date | undefined) => void;
+  onToDateChange?: (date: Date | undefined) => void;
+}
+
+export function DataTableToolbar<TData>({
+  table,
+  categories,
+  classes,
+  fromDate,
+  toDate,
+  onFromDateChange,
+  onToDateChange,
+}: DataTableToolbarProps<TData>) {
+  const isFiltered = table.getState().columnFilters.length > 0 || fromDate || toDate;
+
+  return (
+    <div className="flex flex-col gap-4 bg-card border rounded-md p-4">
+      <div className="flex items-center space-x-2">
+        {/* Search Input */}
+        <Input
+          placeholder="Search students, notes..."
+          value={(table.getColumn("studentName")?.getFilterValue() as string) ?? ""}
+          onChange={(event) => {
+            const value = event.target.value;
+            // Search across multiple columns
+            table.getColumn("studentName")?.setFilterValue(value);
+            table.getColumn("notes")?.setFilterValue(value);
+          }}
+          className="h-8 w-[150px] lg:w-[250px]"
+        />
+
+        {/* Date Range Filter */}
+        <DataTableDateRangeFilter
+          fromDate={fromDate}
+          toDate={toDate}
+          onFromDateChange={onFromDateChange}
+          onToDateChange={onToDateChange}
+          title="Date Range"
+        />
+
+        {/* Category Faceted Filter */}
+        {table.getColumn("categoryId") && (
+          <DataTableFacetedFilter
+            column={table.getColumn("categoryId")}
+            title="Category"
+            options={categories.map((category) => ({
+              label: category.name,
+              value: category.id,
+              color: category.color,
+            }))}
+          />
+        )}
+
+        {/* Class Faceted Filter */}
+        {table.getColumn("classId") && (
+          <DataTableFacetedFilter
+            column={table.getColumn("classId")}
+            title="Class"
+            options={classes.map((cls) => ({
+              label: cls.name,
+              value: cls.id,
+            }))}
+          />
+        )}
+
+        {/* Reset Button */}
+        {isFiltered && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              table.resetColumnFilters();
+              onFromDateChange?.(undefined);
+              onToDateChange?.(undefined);
+            }}
+            className="h-8 px-2 lg:px-3"
+          >
+            Reset
+            <X className="ml-2 h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+**File: `pages/BehaviorLogs.tsx`**
+```typescript
+export default function BehaviorLogs() {
+  // Date filter state
+  const [fromDate, setFromDate] = useState<Date | undefined>();
+  const [toDate, setToDate] = useState<Date | undefined>();
+
+  // Fetch data
+  const { data: behaviorLogs = [] } = useQuery<BehaviorLog[]>({
+    queryKey: ["/api/organizations", orgId, "behavior-logs"],
+    enabled: !!orgId,
+  });
+
+  // Manual date filtering
+  const filteredLogs = behaviorLogs.filter((log) => {
+    const incidentDate = new Date(log.incidentDate);
+
+    if (fromDate && incidentDate < fromDate) return false;
+
+    if (toDate) {
+      const endOfDay = new Date(toDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      if (incidentDate > endOfDay) return false;
+    }
+
+    return true;
+  });
+
+  return (
+    <div className="flex h-full flex-1 flex-col space-y-8 p-8">
+      <PageHeader
+        title="Behavior Logs"
+        description="View and filter all behavior logs"
+        action={<Button>New Log</Button>}
+      />
+
+      <DataTable
+        columns={columns}
+        data={filteredLogs}
+        onRowClick={handleViewLog}
+        initialSorting={[{ id: "incidentDate", desc: true }]}
+        toolbar={(table) => (
+          <DataTableToolbar
+            table={table}
+            categories={categories}
+            classes={classes}
+            fromDate={fromDate}
+            toDate={toDate}
+            onFromDateChange={setFromDate}
+            onToDateChange={setToDate}
+          />
+        )}
+      />
+    </div>
+  );
+}
+```
+
+#### When to Use Which Pattern
+
+**Use DataTableToolbar (Full Pattern):**
+- Pages with tabular data (behavior logs, academic logs, tasks)
+- Need multiple filter types (categories, classes, status, students)
+- Need date range filtering
+- Need search across multiple columns
+- Examples: BehaviorLogs, AcademicLogs, Tasks
+
+**Use SearchInput Only (Simplified Pattern):**
+- Simple list views or card grids
+- Only need text search, no complex filters
+- Examples: Students page (search + class dropdown)
+
+**Use SearchInput + Simple Filters:**
+- Card-based layouts (not tables)
+- Need search plus 1-2 simple filters
+- Example: Students page (SearchInput + class Select dropdown)
+
+**Use Tab-Based Filtering:**
+- Filtering by ownership or category
+- Examples: Lists page (All Lists / My Lists / Shared with Me)
+
+#### Pages Using DataTableToolbar Pattern
+
+1. **BehaviorLogs.tsx** ✅
+   - Search: Student name, notes
+   - Filters: Category (multi-select), Class (multi-select), Date range
+   - Component: `components/behavior-logs/data-table-toolbar.tsx`
+
+2. **AcademicLogs.tsx** ✅
+   - Search: Student name, notes
+   - Filters: Subject (multi-select), Category (multi-select), Class (multi-select), Date range
+   - Component: `components/academic-logs/data-table-toolbar.tsx`
+
+3. **Tasks.tsx** ✅
+   - Search: Task title, description, student name, assignee
+   - Filters: Status (multi-select), Student (multi-select), Due date range
+   - View Toggle: Table/Kanban
+   - Component: `components/tasks/data-table-toolbar.tsx`
+
+#### Pages Using Simplified Patterns
+
+1. **Students.tsx** ✅
+   - SearchInput for name search
+   - Select dropdown for class filtering
+   - Card grid layout (not DataTable)
+
+2. **Lists.tsx** ✅
+   - SearchInput for list name search
+   - Tab-based filtering (All / Mine / Shared)
+   - Simple filtering appropriate for this use case
+
+#### Reusable Components
+
+1. **DataTable** (`components/ui/data-table.tsx`)
+   - Accepts `toolbar` parameter as render function
+   - Integrates with TanStack Table
+   - Used by all table-based pages
+
+2. **DataTableFacetedFilter** (`components/ui/data-table-faceted-filter.tsx`)
+   - Multi-select dropdown with badges
+   - Used for categories, classes, subjects, status, students
+
+3. **DataTableDateRangeFilter** (`components/ui/data-table-date-range-filter.tsx`)
+   - From/To date pickers
+   - Used for date range filtering
+
+4. **SearchInput** (`components/shared/SearchInput.tsx`)
+   - Standalone search input with icon
+   - Used for simple search cases (Students, Lists)
+
+#### Benefits of This Pattern
+
+1. **Consistency:** Same UX across all table views
+2. **Discoverability:** Users know where to find filters
+3. **Functionality:** Multi-select + date range + search everywhere
+4. **Maintainability:** Reusable toolbar components
+5. **User Experience:** Reset button, faceted filters, integrated search
+6. **Performance:** TanStack Table handles column filtering efficiently
+
+#### Migration Checklist
+
+When adding search/filters to a new page:
+
+- [ ] Create `components/{feature}/data-table-toolbar.tsx`
+- [ ] Create `components/{feature}/columns.tsx` (if not exists)
+- [ ] Add date filter state (`fromDate`, `toDate`)
+- [ ] Implement manual date filtering with `useMemo`
+- [ ] Add `filterFn` to all filterable columns
+- [ ] Pass `toolbar` parameter to DataTable
+- [ ] Import and configure DataTableToolbar
+- [ ] Test all filter combinations
+- [ ] Test search functionality
+- [ ] Test reset button
+- [ ] Verify filters work with sorting
+- [ ] Check empty states
+
+### 4. Naming Conventions
 
 #### Mutations
 - CREATE: `create{ResourceName}` (e.g., `createBehaviorLog`, `createStudent`)
@@ -629,7 +1013,7 @@ Organization-scoped format:
 const tempId = `temp-${Date.now()}`;
 ```
 
-### 3. Form Management
+### 5. Form Management
 
 #### Pattern
 - Use `react-hook-form` for form state
@@ -662,7 +1046,7 @@ const form = useForm<FormData>({
 </Form>
 ```
 
-### 4. Error Handling
+### 6. Error Handling
 
 #### User-Facing Errors
 - Always provide user-friendly messages
@@ -702,7 +1086,7 @@ onError: (error: Error) => {
 }
 ```
 
-### 5. Dialog/Modal Management
+### 7. Dialog/Modal Management
 
 #### Pattern
 ```typescript
@@ -723,7 +1107,7 @@ onError: (error, _vars, context) => {
 }
 ```
 
-### 6. TypeScript Best Practices
+### 8. TypeScript Best Practices
 
 - Use shared schema types from `shared/schema.ts`
 - Avoid `any` types - use proper typing

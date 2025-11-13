@@ -11,6 +11,7 @@ import { AddItemsToListDialog } from "@/components/AddItemsToListDialog";
 import { ShareListDialog } from "@/components/ShareListDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { BeeLoading } from "@/components/shared/BeeLoading";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   AlertDialog,
@@ -529,16 +530,7 @@ export default function ListDetail() {
   }, [items, list?.type]);
 
   if (listLoading || itemsLoading) {
-    return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading list...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <BeeLoading />;
   }
 
   if (!list) {

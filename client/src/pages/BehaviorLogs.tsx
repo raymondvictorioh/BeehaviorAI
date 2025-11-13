@@ -2,16 +2,20 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
-import { ClipboardList, Plus } from "lucide-react";
+import { ClipboardList, Plus, X } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
 import { DataTable } from "@/components/ui/data-table";
-import { columns, type BehaviorLog } from "@/components/behavior-logs/columns";
+import { columns, type BehaviorLog as BehaviorLogType } from "@/components/behavior-logs/columns";
 import { DataTableToolbar } from "@/components/behavior-logs/data-table-toolbar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { Badge } from "@/components/ui/badge";
+import { DatePicker } from "@/components/ui/date-picker";
+import { BeeLoader } from "@/components/shared/BeeLoader";
 
 type BehaviorLog = {
   id: string;
@@ -64,6 +68,10 @@ export default function BehaviorLogs() {
   // Date filter states (for custom date range filtering)
   const [fromDate, setFromDate] = useState<Date | undefined>();
   const [toDate, setToDate] = useState<Date | undefined>();
+
+  // Category and class filter states
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
 
   // Details sheet states
   const [selectedLog, setSelectedLog] = useState<any>(null);
@@ -253,8 +261,52 @@ export default function BehaviorLogs() {
     },
   });
 
-  // Apply date range filter to data
-  const filteredByDateLogs = behaviorLogs.filter((log) => {
+  // Filter toggle functions
+  const toggleCategory = (categoryId: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  const toggleClass = (classId: string) => {
+    setSelectedClasses((prev) =>
+      prev.includes(classId)
+        ? prev.filter((id) => id !== classId)
+        : [...prev, classId]
+    );
+  };
+
+  const clearFilters = () => {
+    setSelectedCategories([]);
+    setSelectedClasses([]);
+    setFromDate(undefined);
+    setToDate(undefined);
+  };
+
+  const hasActiveFilters =
+    selectedCategories.length > 0 ||
+    selectedClasses.length > 0 ||
+    fromDate !== undefined ||
+    toDate !== undefined;
+
+  // Apply all filters to data
+  const filteredLogs = behaviorLogs.filter((log) => {
+    // Category filter
+    if (selectedCategories.length > 0 && !selectedCategories.includes(log.categoryId)) {
+      return false;
+    }
+
+    // Class filter
+    if (selectedClasses.length > 0) {
+      const studentClassId = log.student?.classId;
+      if (!studentClassId || !selectedClasses.includes(studentClassId)) {
+        return false;
+      }
+    }
+
+    // Date range filter
     const incidentDate = new Date(log.incidentDate);
 
     if (fromDate && incidentDate < fromDate) {
@@ -300,21 +352,39 @@ export default function BehaviorLogs() {
     createBehaviorLog.mutate(data);
   };
 
-  if (logsLoading) {
-    return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading behavior logs...</p>
-          </div>
+  // Skeleton loader component
+  const BehaviorLogsSkeleton = () => (
+    <div className="p-6 space-y-6">
+      {/* Page Header Skeleton */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="h-8 w-48 bg-muted animate-pulse rounded mb-2" />
+          <div className="h-4 w-96 bg-muted animate-pulse rounded" />
         </div>
+        <div className="h-10 w-32 bg-muted animate-pulse rounded" />
       </div>
-    );
-  }
+
+      {/* Toolbar Skeleton */}
+      <div className="flex items-center gap-4 bg-card border rounded-md p-4">
+        <div className="h-8 w-64 bg-muted animate-pulse rounded" />
+        <div className="h-8 w-40 bg-muted animate-pulse rounded" />
+        <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+        <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+      </div>
+
+      {/* Table Skeleton */}
+      <div className="rounded-md border bg-card">
+        <div className="h-12 bg-muted/50 animate-pulse rounded-t-md border-b" />
+        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <div key={i} className="h-16 border-b last:border-0 bg-muted/30 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="p-6 space-y-6">
+    <BeeLoader isLoading={logsLoading} skeleton={<BehaviorLogsSkeleton />}>
+      <div className="p-6 space-y-6">
       <PageHeader
         title="Behavior Logs"
         description="View and filter all behavior logs across your organization"
@@ -324,91 +394,11 @@ export default function BehaviorLogs() {
             New Log
           </Button>
         }
-      />
-
-      {/* Filters Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Filters</CardTitle>
-              <CardDescription>Filter behavior logs by category, class, or date range</CardDescription>
-            </div>
-            {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-2" />
-                Clear Filters
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Category Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Categories</label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map((category) => (
-                  <Badge
-                    key={category.id}
-                    variant={selectedCategories.includes(category.id) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => toggleCategory(category.id)}
-                  >
-                    {category.name}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Class Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Classes</label>
-              <div className="flex flex-wrap gap-2">
-                {classes.map((cls) => (
-                  <Badge
-                    key={cls.id}
-                    variant={selectedClasses.includes(cls.id) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => toggleClass(cls.id)}
-                  >
-                    {cls.name}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* From Date */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">From Date</label>
-              <DatePicker
-                date={fromDate}
-                onDateChange={setFromDate}
-                placeholder="Select start date"
-              />
-            </div>
-
-            {/* To Date */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">To Date</label>
-              <DatePicker
-                date={toDate}
-                onDateChange={setToDate}
-                placeholder="Select end date"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Results Summary */}
-      <div className="text-sm text-muted-foreground">
-        Showing {filteredLogs.length} of {behaviorLogs.length} behavior logs
-      </div>
+      />  
 
       <DataTable
         columns={columns}
-        data={filteredByDateLogs}
+        data={filteredLogs}
         onRowClick={handleViewLog}
         initialSorting={[{ id: "incidentDate", desc: true }]}
         toolbar={(table) => (
@@ -442,6 +432,7 @@ export default function BehaviorLogs() {
         categories={categories}
         students={students}
       />
-    </div>
+      </div>
+    </BeeLoader>
   );
 }

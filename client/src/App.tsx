@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AssistantSheet } from "@/components/AssistantSheet";
+import { BeeLoading } from "@/components/shared/BeeLoading";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -41,24 +42,9 @@ const Tasks = lazy(() => import("@/pages/Tasks"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
-// Loading skeleton component
-function PageSkeleton() {
-  return (
-    <div className="p-6 space-y-6">
-      <div className="h-8 w-64 bg-muted animate-pulse rounded" />
-      <div className="h-4 w-96 bg-muted animate-pulse rounded" />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function AppRouter() {
   return (
-    <Suspense fallback={<PageSkeleton />}>
+    <Suspense fallback={<BeeLoading />}>
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/students" component={Students} />
@@ -179,19 +165,12 @@ function AppContent() {
   const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
+    return <BeeLoading />;
   }
 
   if (!isAuthenticated) {
     return (
-      <Suspense fallback={<PageSkeleton />}>
+      <Suspense fallback={<BeeLoading />}>
         <Switch>
           <Route path="/signup" component={Signup} />
           <Route path="/login" component={Login} />
@@ -207,7 +186,7 @@ function AppContent() {
 
   if (user && user.organizations && user.organizations.length === 0) {
     return (
-      <Suspense fallback={<PageSkeleton />}>
+      <Suspense fallback={<BeeLoading />}>
         <Onboarding />
       </Suspense>
     );

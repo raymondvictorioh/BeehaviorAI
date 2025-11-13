@@ -19,6 +19,7 @@ import type { BehaviorLogCategory, User, Class, Subject, AcademicLogCategory } f
 import { getColorClass } from "@/lib/utils/colorUtils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { BeeLoader } from "@/components/shared/BeeLoader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -108,6 +109,9 @@ export default function Settings() {
     queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
     enabled: !!orgId,
   });
+
+  // Combine all loading states
+  const isLoading = isLoadingUsers || isLoadingClasses || isLoadingCategories || isLoadingSubjects || isLoadingAcademicCategories;
 
   // Update organization mutation
   const updateOrganization = useMutation({
@@ -841,8 +845,46 @@ export default function Settings() {
     }
   };
 
-  return (
+  // Skeleton loader component
+  const SettingsSkeleton = () => (
     <div className="p-6 space-y-6">
+      {/* Page Header Skeleton */}
+      <div>
+        <div className="h-8 w-48 bg-muted animate-pulse rounded mb-2" />
+        <div className="h-4 w-96 bg-muted animate-pulse rounded" />
+      </div>
+
+      {/* Tabs Skeleton */}
+      <div className="flex gap-2 max-w-4xl">
+        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <div key={i} className="h-10 w-32 bg-muted animate-pulse rounded" />
+        ))}
+      </div>
+
+      {/* Card Skeleton */}
+      <div className="rounded-lg border bg-card p-6 space-y-6 mt-6">
+        <div>
+          <div className="h-6 w-48 bg-muted animate-pulse rounded mb-2" />
+          <div className="h-4 w-96 bg-muted animate-pulse rounded" />
+        </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="h-10 bg-muted animate-pulse rounded" />
+            <div className="h-10 bg-muted animate-pulse rounded" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="h-10 bg-muted animate-pulse rounded" />
+            <div className="h-10 bg-muted animate-pulse rounded" />
+          </div>
+          <div className="h-10 bg-muted animate-pulse rounded" />
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <BeeLoader isLoading={isLoading} skeleton={<SettingsSkeleton />}>
+      <div className="p-6 space-y-6">
       <PageHeader
         title="Settings"
         description="Configure your school's preferences and settings"
@@ -950,7 +992,7 @@ export default function Settings() {
                   data-testid="button-save-organization"
                   disabled={updateOrganization.isPending}
                 >
-                  {updateOrganization.isPending ? "Saving..." : "Save Changes"}
+                  Save Changes
                 </Button>
               </form>
             </CardContent>
@@ -974,23 +1016,7 @@ export default function Settings() {
               </div>
             </CardHeader>
             <CardContent>
-              {isLoadingUsers ? (
-                <div className="space-y-4">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="border rounded-lg p-4 flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="h-5 w-32 bg-muted animate-pulse rounded mb-2" />
-                        <div className="h-4 w-48 bg-muted animate-pulse rounded mb-2" />
-                        <div className="h-6 w-20 bg-muted animate-pulse rounded" />
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="h-8 w-8 bg-muted animate-pulse rounded" />
-                        <div className="h-8 w-8 bg-muted animate-pulse rounded" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : organizationUsers.length === 0 ? (
+              {organizationUsers.length === 0 ? (
                 <div className="text-center py-12">
                   <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground mb-4">No users found in this organization.</p>
@@ -1089,22 +1115,7 @@ export default function Settings() {
               </div>
             </CardHeader>
             <CardContent>
-              {isLoadingClasses ? (
-                <div className="space-y-4">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="border rounded-lg p-4 flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="h-5 w-32 bg-muted animate-pulse rounded mb-2" />
-                        <div className="h-4 w-48 bg-muted animate-pulse rounded" />
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="h-8 w-8 bg-muted animate-pulse rounded" />
-                        <div className="h-8 w-8 bg-muted animate-pulse rounded" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : classes.length === 0 ? (
+              {classes.length === 0 ? (
                 <div className="text-center py-12">
                   <GraduationCap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground mb-4">No classes found. Create your first class to get started.</p>
@@ -1257,11 +1268,7 @@ export default function Settings() {
               </div>
             </CardHeader>
             <CardContent>
-              {isLoadingCategories ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">Loading categories...</p>
-                </div>
-              ) : categories.length === 0 ? (
+              {categories.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground mb-4">No categories yet. Add your first category to get started.</p>
                   <Button
@@ -1340,11 +1347,7 @@ export default function Settings() {
               </div>
             </CardHeader>
             <CardContent>
-              {isLoadingSubjects ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">Loading subjects...</p>
-                </div>
-              ) : subjects.length === 0 ? (
+              {subjects.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground mb-4">No subjects yet. Add your first subject to get started.</p>
                   <Button
@@ -1427,11 +1430,7 @@ export default function Settings() {
               </div>
             </CardHeader>
             <CardContent>
-              {isLoadingAcademicCategories ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">Loading categories...</p>
-                </div>
-              ) : academicCategories.length === 0 ? (
+              {academicCategories.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground mb-4">No categories yet. Add your first category to get started.</p>
                   <Button
@@ -1593,6 +1592,7 @@ export default function Settings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+      </div>
+    </BeeLoader>
   );
 }

@@ -182,12 +182,6 @@ export function AddStudentDialog({
       gender: string;
     }) => {
       const url = `/api/organizations/${organizationId}/students/${student!.id}`;
-      console.log('[DEBUG] Updating student:', {
-        studentId: student!.id,
-        organizationId,
-        url,
-        data,
-      });
 
       const res = await apiRequest(
         "PATCH",
@@ -195,23 +189,15 @@ export function AddStudentDialog({
         data
       );
 
-      console.log('[DEBUG] Response received:', {
-        status: res.status,
-        statusText: res.statusText,
-        contentType: res.headers.get('content-type'),
-        ok: res.ok,
-      });
-
       // Check if response is JSON before parsing
       const contentType = res.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const text = await res.text();
-        console.error('[DEBUG] Non-JSON response received:', text.substring(0, 500));
+        console.error('Non-JSON response received:', text.substring(0, 500));
         throw new Error(`Server returned ${contentType || 'unknown content type'} instead of JSON. This usually means the API endpoint was not found.`);
       }
 
       const result = await res.json();
-      console.log('[DEBUG] Update successful:', result);
       return result;
     },
     // Optimistic update
@@ -422,14 +408,12 @@ export function AddStudentDialog({
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isEditMode ? updateStudent.isPending : createStudent.isPending}
               data-testid="button-submit-student"
             >
-              {isEditMode 
-                ? (updateStudent.isPending ? "Updating..." : "Update Student")
-                : (createStudent.isPending ? "Adding..." : "Add Student")}
+              {isEditMode ? "Update Student" : "Add Student"}
             </Button>
           </DialogFooter>
         </form>
