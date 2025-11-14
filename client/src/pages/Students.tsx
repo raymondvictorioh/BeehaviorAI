@@ -4,20 +4,13 @@ import { AddStudentDialog } from "@/components/AddStudentDialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Plus } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import type { Student, Class } from "@shared/schema";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { SearchInput } from "@/components/shared/SearchInput";
 import { BeeLoader } from "@/components/shared/BeeLoader";
+import { StudentsToolbar } from "@/components/students/students-toolbar";
 
 // Skeleton loader for students page
 function StudentsSkeleton() {
@@ -88,30 +81,13 @@ export default function Students() {
         }
       />
 
-      <div className="flex items-center gap-4">
-        <SearchInput
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search students..."
-          testId="input-search-students"
-          className="flex-1 max-w-sm"
-        />
-        {classes.length > 0 && (
-          <Select value={selectedClass} onValueChange={setSelectedClass}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="All Classes" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Classes</SelectItem>
-              {classes.map((cls) => (
-                <SelectItem key={cls.id} value={cls.id}>
-                  {cls.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+      <StudentsToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        selectedClass={selectedClass}
+        onClassChange={setSelectedClass}
+        classes={classes}
+      />
 
       {filteredStudents.length === 0 && searchQuery === "" ? (
         <div className="text-center py-12">
