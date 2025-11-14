@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,6 +11,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { DataTableToolbar } from "@/components/tasks/data-table-toolbar";
 import { getColumns, type TaskWithStudent } from "@/components/tasks/columns";
 import type { Student } from "@shared/schema";
+import type { Table } from "@tanstack/react-table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +38,9 @@ export default function Tasks() {
   // Date filter states (for manual date range filtering)
   const [fromDate, setFromDate] = useState<Date | undefined>();
   const [toDate, setToDate] = useState<Date | undefined>();
+
+  // Ref to hold the table instance for passing to toolbar
+  const tableRef = useRef<Table<TaskWithStudent> | null>(null);
 
   const orgId = user?.organizations?.[0]?.id;
   const organization = user?.organizations?.[0];
@@ -277,6 +281,18 @@ export default function Tasks() {
         }
       />
 
+      {/* Toolbar - visible in both views */}
+      <DataTableToolbar
+        table={view === "table" ? tableRef.current : undefined}
+        students={students}
+        fromDate={fromDate}
+        toDate={toDate}
+        onFromDateChange={setFromDate}
+        onToDateChange={setToDate}
+        view={view}
+        onViewChange={setView}
+      />
+
       {/* Content */}
       {view === "table" ? (
         <DataTable
@@ -287,18 +303,9 @@ export default function Tasks() {
             setIsAddTaskDialogOpen(true);
           }}
           initialSorting={[{ id: "dueDate", desc: false }]}
-          toolbar={(table) => (
-            <DataTableToolbar
-              table={table}
-              students={students}
-              fromDate={fromDate}
-              toDate={toDate}
-              onFromDateChange={setFromDate}
-              onToDateChange={setToDate}
-              view={view}
-              onViewChange={setView}
-            />
-          )}
+          onTableReady={(table) => {
+            tableRef.current = table;
+          }}
         />
       ) : (
         <KanbanBoard

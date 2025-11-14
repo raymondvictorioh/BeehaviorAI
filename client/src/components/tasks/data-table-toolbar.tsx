@@ -8,7 +8,7 @@ import { DataTableDateRangeFilter } from "@/components/ui/data-table-date-range-
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface DataTableToolbarProps<TData> {
-  table: Table<TData>;
+  table?: Table<TData>; // Optional - undefined in kanban view
   students: Array<{ id: string; name: string }>;
   fromDate?: Date;
   toDate?: Date;
@@ -28,16 +28,19 @@ export function DataTableToolbar<TData>({
   view,
   onViewChange,
 }: DataTableToolbarProps<TData>) {
-  const isFiltered = table.getState().columnFilters.length > 0 || fromDate || toDate;
+  // Check if filters are active (handle case where table is undefined in kanban view)
+  const isFiltered = (table ? table.getState().columnFilters.length > 0 : false) || fromDate || toDate;
 
   return (
     <div className="flex flex-col gap-4 bg-card border rounded-md p-4">
       <div className="flex items-center justify-between space-x-2">
         <div className="flex items-center space-x-2 flex-1">
+          {/* Search input - only functional in table view */}
           <Input
             placeholder="Search tasks, students, assignee..."
-            value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
+            value={(table?.getColumn("title")?.getFilterValue() as string) ?? ""}
             onChange={(event) => {
+              if (!table) return; // No-op in kanban view
               const value = event.target.value;
               // Search across title, description, student name, and assignee
               table.getColumn("title")?.setFilterValue(value);
@@ -46,7 +49,9 @@ export function DataTableToolbar<TData>({
               table.getColumn("assignee")?.setFilterValue(value);
             }}
             className="h-8 w-[150px] lg:w-[250px]"
+            disabled={!table}
           />
+          {/* Date range filter - works in both views via local state */}
           <DataTableDateRangeFilter
             fromDate={fromDate}
             toDate={toDate}
@@ -54,7 +59,8 @@ export function DataTableToolbar<TData>({
             onToDateChange={onToDateChange}
             title="Due Date"
           />
-          {table.getColumn("status") && (
+          {/* Status filter - only functional in table view */}
+          {table?.getColumn("status") && (
             <DataTableFacetedFilter
               column={table.getColumn("status")}
               title="Status"
@@ -66,7 +72,8 @@ export function DataTableToolbar<TData>({
               ]}
             />
           )}
-          {table.getColumn("studentId") && (
+          {/* Student filter - only functional in table view */}
+          {table?.getColumn("studentId") && (
             <DataTableFacetedFilter
               column={table.getColumn("studentId")}
               title="Student"
@@ -76,11 +83,12 @@ export function DataTableToolbar<TData>({
               }))}
             />
           )}
+          {/* Reset button */}
           {isFiltered && (
             <Button
               variant="ghost"
               onClick={() => {
-                table.resetColumnFilters();
+                table?.resetColumnFilters();
                 onFromDateChange?.(undefined);
                 onToDateChange?.(undefined);
               }}
@@ -91,6 +99,7 @@ export function DataTableToolbar<TData>({
             </Button>
           )}
         </div>
+        {/* View toggle - always visible */}
         <Tabs value={view} onValueChange={(v) => onViewChange(v as "table" | "kanban")}>
           <TabsList>
             <TabsTrigger value="table" className="gap-2">

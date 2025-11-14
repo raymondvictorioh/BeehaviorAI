@@ -15,8 +15,9 @@ import {
   Header,
   Row,
   Cell,
+  Table as TanStackTable,
 } from "@tanstack/react-table";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import {
   Table,
@@ -33,6 +34,7 @@ interface DataTableProps<TData, TValue> {
   toolbar?: (table: ReturnType<typeof useReactTable<TData>>) => React.ReactNode;
   onRowClick?: (row: TData) => void;
   initialSorting?: SortingState;
+  onTableReady?: (table: TanStackTable<TData>) => void;
 }
 
 export function DataTable<TData, TValue>({
@@ -41,6 +43,7 @@ export function DataTable<TData, TValue>({
   toolbar,
   onRowClick,
   initialSorting = [],
+  onTableReady,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = useState({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -73,6 +76,13 @@ export function DataTable<TData, TValue>({
       },
     },
   });
+
+  // Notify parent when table is ready
+  useEffect(() => {
+    if (onTableReady) {
+      onTableReady(table);
+    }
+  }, [table, onTableReady]);
 
   return (
     <div className="space-y-4">
