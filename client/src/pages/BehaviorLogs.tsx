@@ -94,7 +94,7 @@ export default function BehaviorLogs() {
 
   // Create behavior log mutation
   const createBehaviorLog = useMutation({
-    mutationFn: async (data: { date: string; category: string; notes: string; studentId?: string }) => {
+    mutationFn: async (data: { date: string; category: string; notes: string; outcome?: string; studentId?: string }) => {
       if (!data.studentId) {
         throw new Error("Student is required");
       }
@@ -103,6 +103,7 @@ export default function BehaviorLogs() {
         categoryId: data.category,
         incidentDate: new Date(data.date).toISOString(),
         notes: data.notes,
+        strategies: data.outcome,
         loggedBy: user?.email || "Unknown",
         organizationId: orgId,
       });
@@ -127,7 +128,7 @@ export default function BehaviorLogs() {
         categoryId: newLog.category,
         incidentDate: new Date(newLog.date),
         notes: newLog.notes,
-        strategies: null,
+        strategies: newLog.outcome || null,
         loggedBy: user?.email || "Unknown",
         loggedAt: new Date(),
         student: existingStudent || {

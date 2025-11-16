@@ -117,7 +117,7 @@ export default function StudentProfile() {
 
   // Create behavior log mutation with optimistic updates
   const createBehaviorLog = useMutation({
-    mutationFn: async (data: { date: string; category: string; notes: string }) => {
+    mutationFn: async (data: { date: string; category: string; notes: string; outcome?: string }) => {
       // data.category contains the category ID
       const response = await fetch(`/api/organizations/${orgId}/students/${studentId}/behavior-logs`, {
         method: "POST",
@@ -125,6 +125,7 @@ export default function StudentProfile() {
         body: JSON.stringify({
           categoryId: data.category, // Send category ID
           notes: data.notes,
+          strategies: data.outcome, // Map outcome to strategies field
           incidentDate: new Date(data.date).toISOString(),
           loggedBy: user?.email || "Unknown",
         }),
@@ -136,7 +137,7 @@ export default function StudentProfile() {
       return response.json();
     },
     // Optimistic update - immediately add behavior log to UI
-    onMutate: async (newLog: { date: string; category: string; notes: string }) => {
+    onMutate: async (newLog: { date: string; category: string; notes: string; outcome?: string }) => {
       await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
 
       const previousLogs = queryClient.getQueryData<BehaviorLog[]>([
@@ -156,7 +157,7 @@ export default function StudentProfile() {
         notes: newLog.notes,
         incidentDate: new Date(newLog.date),
         loggedBy: user?.email || "Unknown",
-        strategies: null,
+        strategies: newLog.outcome || null,
         loggedAt: new Date(),
       };
 
