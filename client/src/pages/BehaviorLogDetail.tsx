@@ -23,43 +23,59 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Calendar, Edit, Trash2, Save, Clock, User, X } from "lucide-react";
+import { Calendar, Edit, Trash2, Save, Clock, User, ArrowLeft } from "lucide-react";
 import { getLegacyBehaviorColor } from "@/lib/utils/colorUtils";
-import { formatDateTime, formatDateOnly } from "@/lib/utils/dateUtils";
-import { Link } from "wouter";
+import { formatDateTime } from "@/lib/utils/dateUtils";
+import { Link, useLocation, useRoute } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { BeeLoader } from "@/components/shared/BeeLoader";
+import type { BehaviorLog, BehaviorLogCategory, Student } from "@shared/schema";
+import { format } from "date-fns";
 
-interface BehaviorLogDetailsSheetProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  log: {
-    id: string;
-    incidentDate: string;
-    category: string;
-    notes: string;
-    strategies?: string;
-    loggedBy: string;
-    loggedAt: string;
-  } | null;
-  onUpdateNotes?: (id: string, notes: string) => void;
-  onUpdateStrategies?: (id: string, strategies: string) => void;
-  onDelete?: (id: string) => void;
-}
+export default function BehaviorLogDetail() {
+  const [, params] = useRoute("/behavior-logs/:id");
+  const [, setLocation] = useLocation();
+  const logId = params?.id;
+  const { user } = useAuth();
+  const orgId = user?.organizations?.[0]?.id;
+  const { toast } = useToast();
 
-export function BehaviorLogDetailsSheet({
-  open,
-  onOpenChange,
-  log,
-  onUpdateNotes,
-  onUpdateStrategies,
-  onDelete,
-}: BehaviorLogDetailsSheetProps) {
-  const [notes, setNotes] = useState(log?.notes || "");
-  const [strategies, setStrategies] = useState(log?.strategies || "");
+  const [notes, setNotes] = useState("");
+  const [strategies, setStrategies] = useState("");
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [isEditingStrategies, setIsEditingStrategies] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // Sync local state when log prop changes
+  // Fetch behavior log
+  const { data: log, isLoading: isLoadingLog } = useQuery<BehaviorLog>({
+    queryKey: ["/api/organizations", orgId, "behavior-logs", logId],
+    queryFn: async () => {
+      const res = await fetch(`/api/organizations/${orgId}/behavior-logs/${logId}`);
+      if (!res.ok) {
+        if (res.status === 404) throw new Error("Behavior log not found");
+        throw new Error("Failed to fetch behavior log");
+      }
+      return res.json();
+    },
+    enabled: !!orgId && !!logId,
+  });
+
+  // Fetch student details
+  const { data: student } = useQuery<Student>({
+    queryKey: ["/api/organizations", orgId, "students", log?.studentId],
+    enabled: !!orgId && !!log?.studentId,
+  });
+
+  // Fetch categories
+  const { data: categories = [] } = useQuery<BehaviorLogCategory[]>({
+    queryKey: ["/api/organizations", orgId, "behavior-log-categories"],
+    enabled: !!orgId,
+  });
+
+  // Sync local state when log data changes
   useEffect(() => {
     if (log) {
       setNotes(log.notes || "");
@@ -67,30 +83,128 @@ export function BehaviorLogDetailsSheet({
     }
   }, [log]);
 
-  if (!log) return null;
+  // Update behavior log mutation
+  const updateBehaviorLog = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<{ notes: string; strategies: string }> }) => {
+      return apiRequest("PATCH", `/api/organizations/${orgId}/behavior-logs/${id}`, updates);
+    },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs", id] });
 
-  const categoryColor = getLegacyBehaviorColor(log.category.toLowerCase());
+      const previousLog = queryClient.getQueryData<BehaviorLog>([
+        "/api/organizations",
+        orgId,
+        "behavior-logs",
+        id,
+      ]);
+
+      if (previousLog) {
+        queryClient.setQueryData<BehaviorLog>(
+          ["/api/organizations", orgId, "behavior-logs", id],
+          { ...previousLog, ...updates }
+        );
+      }
+
+      return { previousLog };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Log updated",
+        description: "The behavior log has been successfully updated.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousLog) {
+        queryClient.setQueryData<BehaviorLog>(
+          ["/api/organizations", orgId, "behavior-logs", logId!],
+          context.previousLog
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update behavior log. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs", logId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", log?.studentId, "behavior-logs"] });
+    },
+  });
+
+  // Delete behavior log mutation
+  const deleteBehaviorLog = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/organizations/${orgId}/behavior-logs/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Log deleted",
+        description: "The behavior log has been successfully deleted.",
+      });
+      // Navigate back to behavior logs list
+      setLocation("/behavior-logs");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete behavior log. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
+      if (log?.studentId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", log.studentId, "behavior-logs"] });
+      }
+    },
+  });
 
   const handleSaveNotes = () => {
-    console.log("Saving incident notes:", notes);
-    onUpdateNotes?.(log.id, notes);
-    setIsEditingNotes(false);
+    if (logId) {
+      updateBehaviorLog.mutate({ id: logId, updates: { notes } });
+      setIsEditingNotes(false);
+    }
   };
 
   const handleSaveStrategies = () => {
-    console.log("Saving strategies:", strategies);
-    onUpdateStrategies?.(log.id, strategies);
-    setIsEditingStrategies(false);
+    if (logId) {
+      updateBehaviorLog.mutate({ id: logId, updates: { strategies } });
+      setIsEditingStrategies(false);
+    }
   };
 
   const handleConfirmDelete = () => {
-    console.log("Deleting log:", log.id);
-    onDelete?.(log.id);
+    if (logId) {
+      deleteBehaviorLog.mutate(logId);
+    }
     setShowDeleteDialog(false);
-    onOpenChange(false);
   };
 
-  if (!open) return null;
+  // Loading state
+  if (isLoadingLog || !log) {
+    return (
+      <BeeLoader isLoading={true} skeleton={
+        <div className="p-6 space-y-6">
+          <div className="h-10 w-32 bg-muted animate-pulse rounded" />
+          <div className="h-12 w-96 bg-muted animate-pulse rounded" />
+          <div className="grid grid-cols-[1fr_320px] gap-6">
+            <div className="space-y-4">
+              <div className="h-64 bg-muted animate-pulse rounded" />
+              <div className="h-64 bg-muted animate-pulse rounded" />
+            </div>
+            <div className="h-96 bg-muted animate-pulse rounded" />
+          </div>
+        </div>
+      }>
+        <div></div>
+      </BeeLoader>
+    );
+  }
+
+  const category = categories.find(cat => cat.id === log.categoryId);
+  const categoryColor = category?.color ? getLegacyBehaviorColor(category.color) : "bg-gray-500";
 
   // Content sections (for both desktop center and mobile tabs)
   const contentSection = (
@@ -220,7 +334,7 @@ export function BehaviorLogDetailsSheet({
         <div className="flex items-center gap-2">
           <div className={`h-3 w-3 rounded-full ${categoryColor}`} />
           <Badge variant="secondary" className="text-xs" data-testid="text-detail-category">
-            {log.category}
+            {category?.name || "Unknown"}
           </Badge>
         </div>
 
@@ -276,80 +390,73 @@ export function BehaviorLogDetailsSheet({
   );
 
   return (
-    <>
-      {/* Full-page overlay */}
-      <div className="fixed inset-0 z-50 bg-background" data-testid="sheet-log-details">
-        {/* Desktop: 3-column grid layout */}
-        <div className="hidden md:grid md:grid-cols-[1fr_320px] h-full">
-          {/* Center: Main content */}
-          <main className="flex flex-col border-r">
-            {/* Breadcrumb header */}
-            <header className="border-b p-4 flex items-center justify-between">
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbLink asChild>
-                      <Link href="/behavior-logs">Behavior Logs</Link>
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>Log Details</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onOpenChange(false)}
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </header>
+    <div className="p-6 space-y-6">
+      {/* Back button */}
+      <Button
+        variant="ghost"
+        onClick={() => setLocation("/behavior-logs")}
+        className="mb-4"
+        data-testid="button-back"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Behavior Logs
+      </Button>
 
-            {/* Main content area */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {contentSection}
-            </div>
-          </main>
+      {/* Breadcrumb */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href="/behavior-logs">Behavior Logs</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          {student && (
+            <>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Link href={`/students/${log.studentId}`}>{student.name}</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+            </>
+          )}
+          <BreadcrumbItem>
+            <BreadcrumbPage>
+              {format(new Date(log.incidentDate), "MMM d, yyyy")}
+            </BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
 
-          {/* Right sidebar: Details panel */}
-          <aside className="bg-muted/30 p-6 overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-4">Details</h2>
+      {/* Desktop: 2-column layout */}
+      <div className="hidden md:grid md:grid-cols-[1fr_320px] gap-6">
+        {/* Main content */}
+        <div className="space-y-6">
+          {contentSection}
+        </div>
+
+        {/* Right sidebar: Details panel */}
+        <div className="bg-muted/30 p-6 rounded-lg border">
+          <h2 className="text-lg font-semibold mb-4">Details</h2>
+          {detailsSection}
+        </div>
+      </div>
+
+      {/* Mobile: Tabs layout */}
+      <div className="md:hidden">
+        <Tabs defaultValue="content" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="content">Content</TabsTrigger>
+            <TabsTrigger value="details">Details</TabsTrigger>
+          </TabsList>
+          <TabsContent value="content" className="space-y-6 mt-6">
+            {contentSection}
+          </TabsContent>
+          <TabsContent value="details" className="space-y-6 mt-6">
             {detailsSection}
-          </aside>
-        </div>
-
-        {/* Mobile: Tabs layout */}
-        <div className="md:hidden flex flex-col h-full">
-          {/* Mobile header */}
-          <header className="border-b p-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Behavior Log</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </header>
-
-          {/* Tabs */}
-          <Tabs defaultValue="content" className="flex-1 flex flex-col">
-            <TabsList className="grid w-full grid-cols-2 mx-4 mt-4">
-              <TabsTrigger value="content">Content</TabsTrigger>
-              <TabsTrigger value="details">Details</TabsTrigger>
-            </TabsList>
-            <TabsContent value="content" className="flex-1 overflow-y-auto p-4 mt-0">
-              {contentSection}
-            </TabsContent>
-            <TabsContent value="details" className="flex-1 overflow-y-auto p-4 mt-0">
-              {detailsSection}
-            </TabsContent>
-          </Tabs>
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Delete confirmation dialog */}
@@ -373,6 +480,6 @@ export function BehaviorLogDetailsSheet({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }
