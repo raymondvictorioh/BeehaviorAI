@@ -28,7 +28,7 @@ export function BeeLoader({ isLoading, skeleton, children }: BeeLoaderProps) {
       // Transition to skeleton after 500ms
       const timer = setTimeout(() => {
         setShowSkeleton(true);
-      }, 500);
+      }, 200);
 
       return () => clearTimeout(timer);
     }

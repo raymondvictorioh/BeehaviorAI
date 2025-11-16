@@ -205,7 +205,14 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
 });
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;
-export type Task = typeof tasks.$inferSelect;
+
+// Base task type from database
+type BaseTask = typeof tasks.$inferSelect;
+
+// Task type with assignee as object
+export type Task = Omit<BaseTask, 'assignee'> & {
+  assignee: { id: string; name: string } | null;
+};
 
 // Student Resources table
 export const studentResources = pgTable("student_resources", {

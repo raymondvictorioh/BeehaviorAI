@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StudentSelector } from "@/components/StudentSelector";
 
 interface AddAcademicLogDialogProps {
   open: boolean;
@@ -33,7 +34,7 @@ interface AddAcademicLogDialogProps {
   }) => void;
   subjects?: Array<{ id: string; name: string; isArchived?: boolean }>;
   categories?: Array<{ id: string; name: string; color?: string | null }>;
-  students?: Array<{ id: string; name: string }>; // Optional: for organization-wide view
+  organizationId?: string; // For server-side student search
 }
 
 const getTodayDate = () => {
@@ -47,7 +48,7 @@ export function AddAcademicLogDialog({
   onSubmit,
   subjects = [],
   categories = [],
-  students = [],
+  organizationId,
 }: AddAcademicLogDialogProps) {
   const [date, setDate] = useState(getTodayDate());
   const [studentId, setStudentId] = useState("");
@@ -60,8 +61,8 @@ export function AddAcademicLogDialog({
   // Filter out archived subjects
   const activeSubjects = subjects.filter((s) => !s.isArchived);
 
-  // Show student selector only when students array is provided (organization-wide view)
-  const showStudentSelector = students.length > 0;
+  // Show student selector only when organizationId is provided (organization-wide view)
+  const showStudentSelector = !!organizationId;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,18 +109,12 @@ export function AddAcademicLogDialog({
             {showStudentSelector && (
               <div className="space-y-2">
                 <Label htmlFor="student">Student *</Label>
-                <Select value={studentId} onValueChange={setStudentId} required>
-                  <SelectTrigger id="student" data-testid="select-student">
-                    <SelectValue placeholder="Select a student" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {students.map((student) => (
-                      <SelectItem key={student.id} value={student.id}>
-                        {student.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <StudentSelector
+                  organizationId={organizationId!}
+                  value={studentId}
+                  onChange={setStudentId}
+                  required
+                />
               </div>
             )}
 

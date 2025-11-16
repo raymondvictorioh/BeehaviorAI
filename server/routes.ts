@@ -336,7 +336,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/organizations/:orgId/students", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId } = req.params;
-      const students = await storage.getStudents(orgId);
+      const { search } = req.query;
+      const students = await storage.getStudents(orgId, search as string | undefined);
       res.json(students);
     } catch (error) {
       console.error("Error fetching students:", error);

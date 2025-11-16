@@ -32,11 +32,6 @@ type Class = {
   name: string;
 };
 
-type Student = {
-  id: string;
-  name: string;
-};
-
 export default function AcademicLogs() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -75,12 +70,6 @@ export default function AcademicLogs() {
   // Fetch classes
   const { data: classes = [] } = useQuery<Class[]>({
     queryKey: ["/api/organizations", orgId, "classes"],
-    enabled: !!orgId,
-  });
-
-  // Fetch students
-  const { data: students = [] } = useQuery<Student[]>({
-    queryKey: ["/api/organizations", orgId, "students"],
     enabled: !!orgId,
   });
 
@@ -203,7 +192,11 @@ export default function AcademicLogs() {
       const previousLogs = queryClient.getQueryData(["/api/organizations", orgId, "academic-logs"]);
 
       const tempId = `temp-${Date.now()}`;
-      const student = students.find((s) => s.id === newLog.studentId);
+
+      // Find student from existing logs or create minimal student object
+      const existingLogs = previousLogs as any[] || [];
+      const existingStudent = existingLogs.find((log: any) => log.studentId === newLog.studentId)?.student;
+
       const subject = subjects.find((s) => s.id === newLog.subjectId);
       const category = categories.find((c) => c.id === newLog.categoryId);
 
@@ -219,12 +212,12 @@ export default function AcademicLogs() {
         notes: newLog.notes,
         loggedBy: user?.email || "Unknown",
         loggedAt: new Date(),
-        student: student ? {
-          id: student.id,
-          name: student.name,
+        student: existingStudent || {
+          id: newLog.studentId,
+          name: "Loading...",
           email: "",
           classId: null,
-        } : undefined,
+        },
         subject: subject ? {
           id: subject.id,
           name: subject.name,
@@ -422,7 +415,7 @@ export default function AcademicLogs() {
         onSubmit={handleCreateLog}
         subjects={subjects}
         categories={categories}
-        students={students}
+        organizationId={orgId}
       />
       </div>
     </BeeLoader>

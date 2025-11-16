@@ -18,13 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StudentSelector } from "@/components/StudentSelector";
 
 interface AddBehaviorLogDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit?: (data: { date: string; category: string; notes: string; studentId?: string }) => void;
   categories?: Array<{ id: string; name: string; color?: string | null }>;
-  students?: Array<{ id: string; name: string }>;
+  organizationId?: string;
   preselectedStudentId?: string;
 }
 
@@ -38,7 +39,7 @@ export function AddBehaviorLogDialog({
   onOpenChange,
   onSubmit,
   categories = [],
-  students = [],
+  organizationId,
   preselectedStudentId,
 }: AddBehaviorLogDialogProps) {
   const [date, setDate] = useState(getTodayDate());
@@ -78,21 +79,15 @@ export function AddBehaviorLogDialog({
                 data-testid="input-log-date"
               />
             </div>
-            {!preselectedStudentId && students.length > 0 && (
+            {!preselectedStudentId && organizationId && (
               <div className="space-y-2">
                 <Label htmlFor="student">Student</Label>
-                <Select value={studentId} onValueChange={setStudentId} required>
-                  <SelectTrigger id="student" data-testid="select-student">
-                    <SelectValue placeholder="Select a student" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {students.map((student) => (
-                      <SelectItem key={student.id} value={student.id}>
-                        {student.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <StudentSelector
+                  organizationId={organizationId}
+                  value={studentId}
+                  onChange={setStudentId}
+                  required
+                />
               </div>
             )}
             <div className="space-y-2">

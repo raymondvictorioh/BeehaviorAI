@@ -40,7 +40,7 @@ export default function Tasks() {
   const [toDate, setToDate] = useState<Date | undefined>();
 
   // Ref to hold the table instance for passing to toolbar
-  const tableRef = useRef<Table<TaskWithStudent> | null>(null);
+  const tableRef = useRef<Table<TaskWithStudent> | undefined>(undefined);
 
   const orgId = user?.organizations?.[0]?.id;
   const organization = user?.organizations?.[0];
@@ -117,6 +117,7 @@ export default function Tasks() {
         description: newTask.description || null,
         dueDate: newTask.dueDate || null,
         status: newTask.status || "To-Do",
+        // Assignee is now an object with id and name
         assignee: newTask.assignee || null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -313,7 +314,7 @@ export default function Tasks() {
           organizationId={orgId}
           showStudentInfo={true}
           onEdit={(task) => {
-            setEditTask(task);
+            setEditTask(task as TaskWithStudent);
             setIsAddTaskDialogOpen(true);
           }}
           onDelete={(task) => setTaskToDelete(task.id)}

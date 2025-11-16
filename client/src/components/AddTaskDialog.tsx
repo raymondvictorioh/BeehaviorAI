@@ -109,7 +109,8 @@ export function AddTaskDialog({
         title: editTask.title || "",
         description: descriptionValue,
         status: (editTask.status as "To-Do" | "In-Progress" | "Done" | "Archived") || "To-Do",
-        assignee: editTask.assignee || NO_ASSIGNEE_VALUE,
+        // Extract ID from assignee object, fallback to NO_ASSIGNEE_VALUE if null
+        assignee: editTask.assignee?.id || NO_ASSIGNEE_VALUE,
         dueDate: editTask.dueDate ? new Date(editTask.dueDate) : undefined,
         organizationId: editTask.organizationId || "",
         studentId: editTask.studentId || "",
@@ -138,24 +139,39 @@ export function AddTaskDialog({
       ALLOWED_ATTR: ['type', 'checked', 'data-type', 'data-checked'],
       ALLOWED_URI_REGEXP: /^$/
     }) : "";
-    
+
+    // Create assignee object if assignee is selected
+    let assigneeObject = null;
+    if (data.assignee && data.assignee !== NO_ASSIGNEE_VALUE) {
+      const selectedUser = organizationUsers.find(ou => ou.userId === data.assignee)?.user;
+      if (selectedUser) {
+        const displayName = selectedUser.firstName && selectedUser.lastName
+          ? `${selectedUser.firstName} ${selectedUser.lastName}`
+          : selectedUser.email || "Unknown User";
+        assigneeObject = {
+          id: data.assignee,
+          name: displayName
+        };
+      }
+    }
+
     // Prepare submit data - remove empty fields and format dates
     const submitData: any = {
       title: data.title,
       description: sanitizedDescription || null,
       status: data.status || "To-Do",
-      // Convert special "no assignee" value to null
-      assignee: data.assignee === NO_ASSIGNEE_VALUE || !data.assignee ? null : data.assignee,
+      // Use assignee object instead of just ID
+      assignee: assigneeObject,
       dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
     };
-    
+
     // Remove fields with empty strings
     Object.keys(submitData).forEach(key => {
       if (submitData[key] === "" || submitData[key] === undefined) {
         submitData[key] = null;
       }
     });
-    
+
     // Close dialog immediately for seamless UX (mutation handles optimistic updates)
     form.reset();
     setDescription("");

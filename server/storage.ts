@@ -49,7 +49,7 @@ import {
   type InsertListShare,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, ne, sql, inArray } from "drizzle-orm";
+import { eq, and, ne, sql, inArray, or, like } from "drizzle-orm";
 
 export interface DashboardStats {
   totalStudents: number;
@@ -75,7 +75,7 @@ export interface IStorage {
   getOrganizationUsers(organizationId: string): Promise<(OrganizationUser & { user: User })[]>;
   
   // Student operations
-  getStudents(organizationId: string): Promise<Student[]>;
+  getStudents(organizationId: string, search?: string): Promise<Student[]>;
   getStudent(id: string, organizationId: string): Promise<Student | undefined>;
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: string, organizationId: string, student: Partial<InsertStudent>): Promise<Student>;
@@ -297,8 +297,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Student operations
-  async getStudents(organizationId: string): Promise<(Student & { behaviorLogsCount: number; academicLogsCount: number })[]> {
-    const result = await db
+  async getStudents(organizationId: string, search?: string): Promise<(Student & { behaviorLogsCount: number; academicLogsCount: number })[]> {
+    // Build base query
+    let query = db
       .select({
         id: students.id,
         organizationId: students.organizationId,
@@ -320,8 +321,25 @@ export class DatabaseStorage implements IStorage {
         )`,
       })
       .from(students)
-      .where(eq(students.organizationId, organizationId));
+      .$dynamic();
 
+    // Apply organization filter and search filter if provided
+    if (search && search.trim()) {
+      const searchTerm = `%${search.toLowerCase()}%`;
+      query = query.where(
+        and(
+          eq(students.organizationId, organizationId),
+          or(
+            sql`LOWER(${students.name}) LIKE ${searchTerm}`,
+            sql`LOWER(${students.email}) LIKE ${searchTerm}`
+          )
+        )
+      );
+    } else {
+      query = query.where(eq(students.organizationId, organizationId));
+    }
+
+    const result = await query;
     return result;
   }
 
@@ -534,14 +552,45 @@ export class DatabaseStorage implements IStorage {
 
   // Task operations
   async getTasks(studentId: string, organizationId: string): Promise<Task[]> {
-    return db
-      .select()
+    const result = await db
+      .select({
+        task: tasks,
+        assigneeUser: users,
+      })
       .from(tasks)
+      .leftJoin(users, eq(tasks.assignee, users.id))
       .where(and(eq(tasks.studentId, studentId), eq(tasks.organizationId, organizationId)));
+
+    return result.map((row) => ({
+      ...row.task,
+      assignee: row.assigneeUser
+        ? {
+            id: row.assigneeUser.id,
+            name: `${row.assigneeUser.firstName || ''} ${row.assigneeUser.lastName || ''}`.trim() || row.assigneeUser.email || 'Unknown',
+          }
+        : null,
+    }));
   }
 
   async getAllTasks(organizationId: string): Promise<Task[]> {
-    return db.select().from(tasks).where(eq(tasks.organizationId, organizationId));
+    const result = await db
+      .select({
+        task: tasks,
+        assigneeUser: users,
+      })
+      .from(tasks)
+      .leftJoin(users, eq(tasks.assignee, users.id))
+      .where(eq(tasks.organizationId, organizationId));
+
+    return result.map((row) => ({
+      ...row.task,
+      assignee: row.assigneeUser
+        ? {
+            id: row.assigneeUser.id,
+            name: `${row.assigneeUser.firstName || ''} ${row.assigneeUser.lastName || ''}`.trim() || row.assigneeUser.email || 'Unknown',
+          }
+        : null,
+    }));
   }
 
   async getAllTasksWithStudents(organizationId: string): Promise<Array<Task & { student: Student | null }>> {
@@ -549,6 +598,7 @@ export class DatabaseStorage implements IStorage {
       .select({
         task: tasks,
         student: students,
+        assigneeUser: users,
       })
       .from(tasks)
       .leftJoin(
@@ -558,6 +608,7 @@ export class DatabaseStorage implements IStorage {
           eq(students.organizationId, organizationId)
         )
       )
+      .leftJoin(users, eq(tasks.assignee, users.id))
       .where(eq(tasks.organizationId, organizationId))
       .orderBy(tasks.createdAt);
 
@@ -565,6 +616,12 @@ export class DatabaseStorage implements IStorage {
 
     const mapped = result.map((row) => ({
       ...row.task,
+      assignee: row.assigneeUser
+        ? {
+            id: row.assigneeUser.id,
+            name: `${row.assigneeUser.firstName || ''} ${row.assigneeUser.lastName || ''}`.trim() || row.assigneeUser.email || 'Unknown',
+          }
+        : null,
       student: row.student,
     }));
 
@@ -575,7 +632,30 @@ export class DatabaseStorage implements IStorage {
 
   async createTask(task: InsertTask): Promise<Task> {
     const [newTask] = await db.insert(tasks).values(task).returning();
-    return newTask;
+
+    // If assignee is set, fetch the user details
+    if (newTask.assignee) {
+      const assigneeUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, newTask.assignee))
+        .limit(1);
+
+      return {
+        ...newTask,
+        assignee: assigneeUser[0]
+          ? {
+              id: assigneeUser[0].id,
+              name: `${assigneeUser[0].firstName || ''} ${assigneeUser[0].lastName || ''}`.trim() || assigneeUser[0].email || 'Unknown',
+            }
+          : null,
+      };
+    }
+
+    return {
+      ...newTask,
+      assignee: null,
+    };
   }
 
   async updateTask(id: string, organizationId: string, task: Partial<InsertTask>): Promise<Task> {
@@ -612,7 +692,30 @@ export class DatabaseStorage implements IStorage {
     }
 
     console.log(`[DEBUG Storage] Task updated successfully:`, updated);
-    return updated;
+
+    // If assignee is set, fetch the user details
+    if (updated.assignee) {
+      const assigneeUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, updated.assignee))
+        .limit(1);
+
+      return {
+        ...updated,
+        assignee: assigneeUser[0]
+          ? {
+              id: assigneeUser[0].id,
+              name: `${assigneeUser[0].firstName || ''} ${assigneeUser[0].lastName || ''}`.trim() || assigneeUser[0].email || 'Unknown',
+            }
+          : null,
+      };
+    }
+
+    return {
+      ...updated,
+      assignee: null,
+    };
   }
 
   async deleteTask(id: string, organizationId: string): Promise<void> {

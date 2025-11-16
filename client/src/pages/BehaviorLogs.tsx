@@ -55,11 +55,6 @@ type Class = {
   name: string;
 };
 
-type Student = {
-  id: string;
-  name: string;
-};
-
 export default function BehaviorLogs() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -99,11 +94,6 @@ export default function BehaviorLogs() {
     enabled: !!orgId,
   });
 
-  // Fetch students
-  const { data: students = [] } = useQuery<Student[]>({
-    queryKey: ["/api/organizations", orgId, "students"],
-    enabled: !!orgId,
-  });
 
   // Update behavior log mutation
   const updateBehaviorLog = useMutation({
@@ -220,7 +210,11 @@ export default function BehaviorLogs() {
       const previousLogs = queryClient.getQueryData(["/api/organizations", orgId, "behavior-logs"]);
 
       const tempId = `temp-${Date.now()}`;
-      const student = students.find((s) => s.id === newLog.studentId);
+
+      // Find student from existing logs or create minimal student object
+      const existingLogs = previousLogs as any[] || [];
+      const existingStudent = existingLogs.find((log: any) => log.studentId === newLog.studentId)?.student;
+
       const category = categories.find((c) => c.id === newLog.category);
 
       const optimisticLog = {
@@ -233,12 +227,12 @@ export default function BehaviorLogs() {
         strategies: null,
         loggedBy: user?.email || "Unknown",
         loggedAt: new Date(),
-        student: student ? {
-          id: student.id,
-          name: student.name,
+        student: existingStudent || {
+          id: newLog.studentId,
+          name: "Loading...",
           email: "",
           classId: null,
-        } : undefined,
+        },
         category: category ? {
           id: category.id,
           name: category.name,
@@ -451,7 +445,7 @@ export default function BehaviorLogs() {
         onOpenChange={setIsAddLogDialogOpen}
         onSubmit={handleCreateLog}
         categories={categories}
-        students={students}
+        organizationId={orgId}
       />
       </div>
     </BeeLoader>

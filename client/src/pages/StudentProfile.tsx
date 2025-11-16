@@ -365,7 +365,9 @@ export default function StudentProfile() {
         description: newTask.description || null,
         dueDate: newTask.dueDate ? new Date(newTask.dueDate) : null,
         status: (newTask.status as string) || "To-Do",
-        assignee: newTask.assignee || null,
+        assignee: newTask.assignee
+          ? { id: newTask.assignee, name: "Loading..." }
+          : null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -435,7 +437,14 @@ export default function StudentProfile() {
   // Update task mutation with optimistic updates
   const updateTask = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Task> }) => {
-      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/tasks/${id}`, updates);
+      // Transform assignee object to ID string for API
+      const apiUpdates = {
+        ...updates,
+        assignee: updates.assignee && typeof updates.assignee === 'object'
+          ? updates.assignee.id
+          : updates.assignee,
+      };
+      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/tasks/${id}`, apiUpdates);
       return await res.json();
     },
     // Optimistic update - immediately update UI before API call completes
@@ -1392,9 +1401,9 @@ export default function StudentProfile() {
                     title: task.title,
                     description: task.description || null,
                     status: newStatus,
-                    assignee: task.assignee || null,
+                    assignee: task.assignee?.id || null,
                     dueDate: task.dueDate || null,
-                  },
+                  } as any, // Form data has string assignee, will be transformed in mutationFn
                 });
               }}
               onEdit={(task) => {
@@ -1476,7 +1485,7 @@ export default function StudentProfile() {
             // Edit mode - update existing task
             updateTask.mutate({
               id: editTask.id,
-              updates: data,
+              updates: data as any, // Form data has string assignee, will be transformed in mutationFn
             });
           } else {
             // Create mode - create new task

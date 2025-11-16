@@ -1,6 +1,5 @@
-import { useState, useRef, useMemo } from "react";
-import { Task, type User } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef } from "react";
+import { Task } from "@shared/schema";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,12 +15,6 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
-
-interface OrganizationUser {
-  userId: string;
-  user: User;
-  role: string;
-}
 
 import {
   DndContext,
@@ -103,27 +96,28 @@ function formatDueDateText(dueDate: Date | string | null): string {
 }
 
 // Draggable Task Card Component
-function DraggableTaskCard({ task, onEdit, onDelete, onStatusChange, userMap }: {
+function DraggableTaskCard({ task, onEdit, onDelete, onStatusChange }: {
   task: Task;
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
   onStatusChange?: (task: Task, newStatus: string) => void;
-  userMap?: Map<string, User>;
 }) {
   const dueDateStatus = getDueDateStatus(task.dueDate);
-  
-  // Get user info from assignee ID
-  const assignedUser = task.assignee ? userMap?.get(task.assignee) : null;
-  const assigneeDisplayName = assignedUser
-    ? (assignedUser.firstName && assignedUser.lastName
-        ? `${assignedUser.firstName} ${assignedUser.lastName}`
-        : assignedUser.email)
-    : task.assignee; // Fallback to ID if user not found
-  const assigneeInitials = assignedUser
-    ? (assignedUser.firstName && assignedUser.lastName
-        ? `${assignedUser.firstName[0]}${assignedUser.lastName[0]}`.toUpperCase()
-        : assignedUser.email?.[0]?.toUpperCase() || "U")
-    : task.assignee?.substring(0, 2).toUpperCase() || "U";
+
+  // Assignee is now an object with id and name
+  const assigneeDisplayName = task.assignee?.name || null;
+  const assigneeInitials = task.assignee?.name
+    ? getInitials(task.assignee.name)
+    : "U";
+
+  // Helper to get initials from name
+  function getInitials(name: string) {
+    const parts = name.split(" ");
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  }
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: {
@@ -322,20 +316,18 @@ function DraggableTaskCard({ task, onEdit, onDelete, onStatusChange, userMap }: 
 }
 
 // Droppable Column Component
-function DroppableColumn({ 
-  column, 
-  tasks, 
-  onEdit, 
-  onDelete, 
-  onStatusChange,
-  userMap
+function DroppableColumn({
+  column,
+  tasks,
+  onEdit,
+  onDelete,
+  onStatusChange
 }: {
   column: typeof statusColumns[0];
   tasks: Task[];
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
   onStatusChange?: (task: Task, newStatus: string) => void;
-  userMap?: Map<string, User>;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
@@ -375,7 +367,6 @@ function DroppableColumn({
             onEdit={onEdit}
             onDelete={onDelete}
             onStatusChange={onStatusChange}
-            userMap={userMap}
           />
         ))}
         {columnTasks.length === 0 && (
@@ -392,23 +383,8 @@ function DroppableColumn({
   );
 }
 
-export function KanbanBoard({ tasks, onEdit, onDelete, onStatusChange, organizationId }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, onEdit, onDelete, onStatusChange }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  
-  // Fetch organization users to map user IDs to user info
-  const { data: organizationUsers = [] } = useQuery<OrganizationUser[]>({
-    queryKey: ["/api/organizations", organizationId, "users"],
-    enabled: !!organizationId,
-  });
-
-  // Create a map of user IDs to user objects for quick lookup
-  const userMap = useMemo(() => {
-    const map = new Map<string, User>();
-    organizationUsers.forEach((orgUser) => {
-      map.set(orgUser.userId, orgUser.user);
-    });
-    return map;
-  }, [organizationUsers]);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -479,7 +455,6 @@ export function KanbanBoard({ tasks, onEdit, onDelete, onStatusChange, organizat
             onEdit={onEdit}
             onDelete={onDelete}
             onStatusChange={onStatusChange}
-            userMap={userMap}
           />
         ))}
       </div>
@@ -493,18 +468,15 @@ export function KanbanBoard({ tasks, onEdit, onDelete, onStatusChange, organizat
                 </CardTitle>
                 <div className="flex flex-col gap-1.5">
                   {activeTask.assignee && (() => {
-                    const assignedUser = userMap.get(activeTask.assignee);
-                    const displayName = assignedUser
-                      ? (assignedUser.firstName && assignedUser.lastName
-                          ? `${assignedUser.firstName} ${assignedUser.lastName}`
-                          : assignedUser.email)
-                      : activeTask.assignee;
-                    const initials = assignedUser
-                      ? (assignedUser.firstName && assignedUser.lastName
-                          ? `${assignedUser.firstName[0]}${assignedUser.lastName[0]}`.toUpperCase()
-                          : assignedUser.email?.[0]?.toUpperCase() || "U")
-                      : activeTask.assignee?.substring(0, 2).toUpperCase() || "U";
-                    
+                    const displayName = activeTask.assignee.name;
+                    const initials = (() => {
+                      const parts = displayName.split(" ");
+                      if (parts.length >= 2) {
+                        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+                      }
+                      return displayName.substring(0, 2).toUpperCase();
+                    })();
+
                     return (
                       <div className="flex items-center gap-1.5">
                         <Avatar className="h-5 w-5">

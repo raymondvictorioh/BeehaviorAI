@@ -2,7 +2,6 @@ import { ColumnDef, Column, Row } from "@tanstack/react-table";
 import { format, isPast, isToday, isThisWeek } from "date-fns";
 import { ArrowUpDown, Pencil, Trash2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Task, Student } from "@shared/schema";
@@ -25,22 +24,72 @@ const getDueDateColor = (dueDate: Date | string | null) => {
   return "text-muted-foreground";
 };
 
-const getStatusBadgeColor = (status: string) => {
-  switch (status) {
-    case "To-Do": return "bg-slate-100 text-slate-800";
-    case "In-Progress": return "bg-blue-100 text-blue-800";
-    case "Done": return "bg-green-100 text-green-800";
-    case "Archived": return "bg-gray-100 text-gray-800";
-    default: return "bg-gray-100";
-  }
-};
-
 interface ColumnsOptions {
   onEdit?: (task: TaskWithStudent) => void;
   onDelete?: (task: TaskWithStudent) => void;
 }
 
 export const getColumns = ({ onEdit, onDelete }: ColumnsOptions = {}): ColumnDef<TaskWithStudent>[] => [
+  {
+    accessorKey: "assignee",
+    id: "assignee",
+    header: ({ column }: { column: Column<TaskWithStudent> }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="-ml-4"
+        >
+          Assignee
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      );
+    },
+    cell: ({ row }: { row: Row<TaskWithStudent> }) => {
+      const assignee = row.getValue("assignee") as { id: string; name: string } | null;
+      if (!assignee) {
+        return <span className="text-muted-foreground">Unassigned</span>;
+      }
+      return (
+        <div className="flex items-center gap-2">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="text-sm">
+              {getInitials(assignee.name)}
+            </AvatarFallback>
+          </Avatar>
+          <span>{assignee.name}</span>
+        </div>
+      );
+    },
+    filterFn: (row: Row<TaskWithStudent>, id: string, value: string) => {
+      const assignee = row.getValue(id) as { id: string; name: string } | null;
+      if (!assignee) return false;
+      return assignee.name.toLowerCase().includes(value.toLowerCase());
+    },
+  },
+  {
+    accessorKey: "title",
+    id: "title",
+    header: ({ column }: { column: Column<TaskWithStudent> }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="-ml-4"
+        >
+          Title
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      );
+    },
+    cell: ({ row }: { row: Row<TaskWithStudent> }) => {
+      return <div className="font-medium">{row.getValue("title")}</div>;
+    },
+    filterFn: (row: Row<TaskWithStudent>, id: string, value: string) => {
+      const title = row.getValue(id) as string;
+      return title.toLowerCase().includes(value.toLowerCase());
+    },
+  },
   {
     accessorKey: "student.name",
     id: "studentName",
@@ -64,118 +113,17 @@ export const getColumns = ({ onEdit, onDelete }: ColumnsOptions = {}): ColumnDef
       return (
         <div className="flex items-center gap-2">
           <Avatar className="h-8 w-8">
-            <AvatarFallback>
+            <AvatarFallback className="text-sm">
               {getInitials(student.name)}
             </AvatarFallback>
           </Avatar>
-          <span className="font-medium">{student.name}</span>
+          <span>{student.name}</span>
         </div>
       );
     },
     filterFn: (row: Row<TaskWithStudent>, id: string, value: string) => {
       const studentName = row.original.student?.name?.toLowerCase() || "";
       return studentName.includes(value.toLowerCase());
-    },
-  },
-  {
-    accessorKey: "title",
-    id: "title",
-    header: ({ column }: { column: Column<TaskWithStudent> }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="-ml-4"
-        >
-          Task
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-    cell: ({ row }: { row: Row<TaskWithStudent> }) => {
-      return <div>{row.getValue("title")}</div>;
-    },
-    filterFn: (row: Row<TaskWithStudent>, id: string, value: string) => {
-      const title = row.getValue(id) as string;
-      return title.toLowerCase().includes(value.toLowerCase());
-    },
-  },
-  {
-    accessorKey: "description",
-    id: "description",
-    header: "Description",
-    cell: ({ row }: { row: Row<TaskWithStudent> }) => {
-      const description = row.getValue("description") as string | null;
-      if (!description) return <span className="text-muted-foreground">-</span>;
-
-      // Strip HTML tags for display
-      const plainText = description.replace(/<[^>]*>/g, "");
-      return (
-        <div className="max-w-md">
-          <div className="truncate" title={plainText}>
-            {plainText}
-          </div>
-        </div>
-      );
-    },
-    filterFn: (row: Row<TaskWithStudent>, id: string, value: string) => {
-      const description = row.getValue(id) as string | null;
-      if (!description) return false;
-      // Strip HTML tags for search
-      const plainText = description.replace(/<[^>]*>/g, "");
-      return plainText.toLowerCase().includes(value.toLowerCase());
-    },
-  },
-  {
-    accessorKey: "status",
-    id: "status",
-    header: ({ column }: { column: Column<TaskWithStudent> }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="-ml-4"
-        >
-          Status
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-    cell: ({ row }: { row: Row<TaskWithStudent> }) => {
-      const status = row.getValue("status") as string;
-      return (
-        <Badge className={getStatusBadgeColor(status)}>
-          {status}
-        </Badge>
-      );
-    },
-    filterFn: (row: Row<TaskWithStudent>, id: string, value: string[]) => {
-      return value.includes(row.getValue(id));
-    },
-  },
-  {
-    accessorKey: "studentId",
-    id: "studentId",
-    header: "Student ID",
-    cell: ({ row }: { row: Row<TaskWithStudent> }) => null, // Hidden column for filtering
-    filterFn: (row: Row<TaskWithStudent>, id: string, value: string[]) => {
-      return value.includes(row.getValue(id));
-    },
-    enableHiding: true,
-  },
-  {
-    accessorKey: "assignee",
-    id: "assignee",
-    header: "Assignee",
-    cell: ({ row }: { row: Row<TaskWithStudent> }) => {
-      const assignee = row.getValue("assignee") as string | null;
-      if (!assignee) return <span className="text-muted-foreground">-</span>;
-      return <div>{assignee}</div>;
-    },
-    filterFn: (row: Row<TaskWithStudent>, id: string, value: string) => {
-      const assignee = row.getValue(id) as string | null;
-      if (!assignee) return false;
-      return assignee.toLowerCase().includes(value.toLowerCase());
     },
   },
   {
