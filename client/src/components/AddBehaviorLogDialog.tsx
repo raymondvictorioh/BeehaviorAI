@@ -39,15 +39,21 @@ interface AddBehaviorLogDialogProps {
   preselectedStudentId?: string;
 }
 
-const getTodayDate = () => {
+const getTodayDateTime = () => {
   const today = new Date();
-  return today.toISOString().split('T')[0];
+  // Format as YYYY-MM-DDTHH:mm for datetime-local input
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  const hours = String(today.getHours()).padStart(2, '0');
+  const minutes = String(today.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 // Create validation schema factory
 const createBehaviorLogSchema = (requireStudent: boolean) => {
   return z.object({
-    date: z.string().min(1, "Date is required"),
+    date: z.string().min(1, "Date & time are required"),
     studentId: requireStudent
       ? z.string().min(1, "Student is required")
       : z.string().optional(),
@@ -79,7 +85,7 @@ export function AddBehaviorLogDialog({
   const form = useForm<BehaviorLogFormData>({
     resolver: zodResolver(createBehaviorLogSchema(requireStudent)),
     defaultValues: {
-      date: getTodayDate(),
+      date: getTodayDateTime(),
       category: "",
       notes: "",
       outcome: "",
@@ -91,7 +97,7 @@ export function AddBehaviorLogDialog({
   useEffect(() => {
     if (open) {
       form.reset({
-        date: getTodayDate(),
+        date: getTodayDateTime(),
         category: "",
         notes: "",
         outcome: "",
@@ -110,7 +116,7 @@ export function AddBehaviorLogDialog({
       studentId: data.studentId,
     });
     form.reset({
-      date: getTodayDate(),
+      date: getTodayDateTime(),
       category: "",
       notes: "",
       outcome: "",
@@ -130,18 +136,18 @@ export function AddBehaviorLogDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleFormSubmit)} className="flex flex-col flex-1 overflow-hidden">
             <div className="space-y-4 py-4 overflow-y-auto flex-1 px-1">
-              {/* Date Field */}
+              {/* Date & Time Field */}
               <FormField
                 control={form.control}
                 name="date"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Date <span className="text-destructive">*</span>
+                      Date & Time <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input
-                        type="date"
+                        type="datetime-local"
                         {...field}
                         data-testid="input-log-date"
                       />
