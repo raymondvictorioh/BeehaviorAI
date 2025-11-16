@@ -61,7 +61,7 @@ export function AddBehaviorLogDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="dialog-add-log">
         <DialogHeader>
-          <DialogTitle>Add Behavior Log</DialogTitle>
+          <DialogTitle>Add Behavior Log!</DialogTitle>
           <DialogDescription>
             Record a new behavior incident or observation{preselectedStudentId ? " for this student" : ""}.
           </DialogDescription>
