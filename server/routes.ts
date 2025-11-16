@@ -460,6 +460,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single behavior log by ID
+  app.get("/api/organizations/:orgId/behavior-logs/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const log = await storage.getBehaviorLog(id, orgId);
+      if (!log) {
+        return res.status(404).json({ message: "Behavior log not found" });
+      }
+      res.json(log);
+    } catch (error) {
+      console.error("Error fetching behavior log:", error);
+      res.status(500).json({ message: "Failed to fetch behavior log" });
+    }
+  });
+
   // Create behavior log at organization level (for organization-wide behavior logs page)
   app.post("/api/organizations/:orgId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {

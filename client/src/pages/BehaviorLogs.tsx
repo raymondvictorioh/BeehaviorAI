@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ClipboardList, Plus, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
 import { AddBehaviorLogDialog } from "@/components/AddBehaviorLogDialog";
 import { DataTable } from "@/components/ui/data-table";
 import { columns, type BehaviorLog as BehaviorLogType } from "@/components/behavior-logs/columns";
@@ -63,6 +63,7 @@ type Student = {
 export default function BehaviorLogs() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const orgId = user?.organizations?.[0]?.id;
 
   // Date filter states (for custom date range filtering)
@@ -72,10 +73,6 @@ export default function BehaviorLogs() {
   // Category and class filter states
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
-
-  // Details sheet states
-  const [selectedLog, setSelectedLog] = useState<any>(null);
-  const [isLogDetailsOpen, setIsLogDetailsOpen] = useState(false);
 
   // Add log dialog state
   const [isAddLogDialogOpen, setIsAddLogDialogOpen] = useState(false);
@@ -103,100 +100,6 @@ export default function BehaviorLogs() {
   const { data: students = [] } = useQuery<Student[]>({
     queryKey: ["/api/organizations", orgId, "students"],
     enabled: !!orgId,
-  });
-
-  // Update behavior log mutation
-  const updateBehaviorLog = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: { notes?: string; strategies?: string } }) => {
-      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/behavior-logs/${id}`, updates);
-      return await res.json();
-    },
-    onMutate: async ({ id, updates }) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
-      const previousLogs = queryClient.getQueryData(["/api/organizations", orgId, "behavior-logs"]);
-
-      queryClient.setQueryData(["/api/organizations", orgId, "behavior-logs"], (old: any[]) =>
-        old.map((log) => (log.id === id ? { ...log, ...updates } : log))
-      );
-
-      if (selectedLog && selectedLog.id === id) {
-        setSelectedLog((prev: any) => ({ ...prev, ...updates }));
-      }
-
-      return { previousLogs };
-    },
-    onSuccess: () => {
-      toast({
-        title: "Behavior log updated",
-        description: "Changes saved successfully.",
-      });
-    },
-    onError: (_error, _vars, context) => {
-      queryClient.setQueryData(["/api/organizations", orgId, "behavior-logs"], context?.previousLogs);
-      toast({
-        title: "Failed to update",
-        description: "Could not save changes. Please try again.",
-        variant: "destructive",
-      });
-    },
-    onSettled: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
-      // Invalidate student-specific query if we can find the log
-      if (variables && typeof variables === 'object' && 'id' in variables) {
-        const logs = queryClient.getQueryData(["/api/organizations", orgId, "behavior-logs"]) as any[];
-        const log = logs?.find((l) => l.id === variables.id);
-        if (log?.studentId) {
-          queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", log.studentId, "behavior-logs"] });
-        }
-      }
-    },
-  });
-
-  // Delete behavior log mutation
-  const deleteBehaviorLog = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/organizations/${orgId}/behavior-logs/${id}`);
-    },
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
-      const previousLogs = queryClient.getQueryData(["/api/organizations", orgId, "behavior-logs"]);
-
-      queryClient.setQueryData(["/api/organizations", orgId, "behavior-logs"], (old: any[]) =>
-        old.filter((log) => log.id !== id)
-      );
-
-      if (selectedLog && selectedLog.id === id) {
-        setIsLogDetailsOpen(false);
-        setSelectedLog(null);
-      }
-
-      return { previousLogs };
-    },
-    onSuccess: () => {
-      toast({
-        title: "Behavior log deleted",
-        description: "The behavior log has been removed.",
-      });
-    },
-    onError: (_error, _vars, context) => {
-      queryClient.setQueryData(["/api/organizations", orgId, "behavior-logs"], context?.previousLogs);
-      toast({
-        title: "Failed to delete",
-        description: "Could not delete the behavior log. Please try again.",
-        variant: "destructive",
-      });
-    },
-    onSettled: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
-      // Invalidate student-specific query if we can find the log
-      if (typeof variables === 'string') {
-        const logs = queryClient.getQueryData(["/api/organizations", orgId, "behavior-logs"]) as any[];
-        const log = logs?.find((l) => l.id === variables);
-        if (log?.studentId) {
-          queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", log.studentId, "behavior-logs"] });
-        }
-      }
-    },
   });
 
   // Create behavior log mutation
@@ -347,26 +250,7 @@ export default function BehaviorLogs() {
 
   // Behavior log handlers
   const handleViewLog = (log: BehaviorLog) => {
-    const logWithCategory = {
-      ...log,
-      category: log.category?.name || "Unknown",
-      incidentDate: format(new Date(log.incidentDate), "yyyy-MM-dd"),
-      loggedAt: log.loggedAt ? format(new Date(log.loggedAt), "yyyy-MM-dd HH:mm:ss") : "",
-    };
-    setSelectedLog(logWithCategory);
-    setIsLogDetailsOpen(true);
-  };
-
-  const handleUpdateNotes = (id: string, notes: string) => {
-    updateBehaviorLog.mutate({ id, updates: { notes } });
-  };
-
-  const handleUpdateStrategies = (id: string, strategies: string) => {
-    updateBehaviorLog.mutate({ id, updates: { strategies } });
-  };
-
-  const handleDeleteLog = (id: string) => {
-    deleteBehaviorLog.mutate(id);
+    setLocation(`/behavior-logs/${log.id}`);
   };
 
   const handleCreateLog = (data: { date: string; category: string; notes: string; studentId?: string }) => {
@@ -433,16 +317,6 @@ export default function BehaviorLogs() {
             onToDateChange={setToDate}
           />
         )}
-      />
-
-      {/* Behavior Log Details Sheet */}
-      <BehaviorLogDetailsSheet
-        open={isLogDetailsOpen}
-        onOpenChange={setIsLogDetailsOpen}
-        log={selectedLog}
-        onUpdateNotes={handleUpdateNotes}
-        onUpdateStrategies={handleUpdateStrategies}
-        onDelete={handleDeleteLog}
       />
 
       {/* Add Behavior Log Dialog */}

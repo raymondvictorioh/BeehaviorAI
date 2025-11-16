@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BehaviorLogEntry } from "@/components/BehaviorLogEntry";
-import { BehaviorLogDetailsSheet } from "@/components/BehaviorLogDetailsSheet";
 import { AcademicLogEntry } from "@/components/AcademicLogEntry";
 import { AcademicLogDetailsSheet } from "@/components/AcademicLogDetailsSheet";
 import { AddAcademicLogDialog } from "@/components/AddAcademicLogDialog";
@@ -34,8 +33,6 @@ export default function StudentProfile() {
   const orgId = user?.organizations?.[0]?.id;
 
   const [isAddLogDialogOpen, setIsAddLogDialogOpen] = useState(false);
-  const [selectedLog, setSelectedLog] = useState<any>(null);
-  const [isLogDetailsOpen, setIsLogDetailsOpen] = useState(false);
   const [isAddAcademicLogDialogOpen, setIsAddAcademicLogDialogOpen] = useState(false);
   const [selectedAcademicLog, setSelectedAcademicLog] = useState<any>(null);
   const [isAcademicLogDetailsOpen, setIsAcademicLogDetailsOpen] = useState(false);
@@ -210,122 +207,6 @@ export default function StudentProfile() {
       toast({
         title: "Error",
         description: error.message || "Failed to add behavior log. Please try again.",
-        variant: "destructive",
-      });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
-    },
-  });
-
-  // Update behavior log mutation with optimistic updates
-  const updateBehaviorLog = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<{ notes: string; strategies: string }> }) => {
-      return apiRequest("PATCH", `/api/organizations/${orgId}/behavior-logs/${id}`, updates);
-    },
-    // Optimistic update - immediately update UI
-    onMutate: async ({ id, updates }) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
-
-      const previousLogs = queryClient.getQueryData<BehaviorLog[]>([
-        "/api/organizations",
-        orgId,
-        "students",
-        studentId,
-        "behavior-logs",
-      ]);
-
-      if (previousLogs) {
-        queryClient.setQueryData<BehaviorLog[]>(
-          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
-          previousLogs.map((log) => (log.id === id ? { ...log, ...updates } : log))
-        );
-      }
-
-      // Update the selected log with the new data
-      if (selectedLog && selectedLog.id === id) {
-        setSelectedLog((prev: any) => ({
-          ...prev,
-          ...updates,
-        }));
-      }
-
-      return { previousLogs };
-    },
-    onSuccess: (_, variables) => {
-      toast({
-        title: "Log updated",
-        description: "The behavior log has been successfully updated.",
-      });
-    },
-    onError: (error: Error, _variables, context) => {
-      if (context?.previousLogs) {
-        queryClient.setQueryData<BehaviorLog[]>(
-          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
-          context.previousLogs
-        );
-      }
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update behavior log. Please try again.",
-        variant: "destructive",
-      });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "behavior-logs"] });
-    },
-  });
-
-  // Delete behavior log mutation with optimistic updates
-  const deleteBehaviorLog = useMutation({
-    mutationFn: async (id: string) => {
-      return apiRequest("DELETE", `/api/organizations/${orgId}/behavior-logs/${id}`);
-    },
-    // Optimistic update - immediately remove from UI
-    onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "students", studentId, "behavior-logs"] });
-
-      const previousLogs = queryClient.getQueryData<BehaviorLog[]>([
-        "/api/organizations",
-        orgId,
-        "students",
-        studentId,
-        "behavior-logs",
-      ]);
-
-      if (previousLogs) {
-        queryClient.setQueryData<BehaviorLog[]>(
-          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
-          previousLogs.filter((log) => log.id !== id)
-        );
-      }
-
-      // Close details sheet if viewing the deleted log
-      if (selectedLog && selectedLog.id === id) {
-        setIsLogDetailsOpen(false);
-        setSelectedLog(null);
-      }
-
-      return { previousLogs };
-    },
-    onSuccess: () => {
-      toast({
-        title: "Log deleted",
-        description: "The behavior log has been successfully deleted.",
-      });
-    },
-    onError: (error: Error, _variables, context) => {
-      if (context?.previousLogs) {
-        queryClient.setQueryData<BehaviorLog[]>(
-          ["/api/organizations", orgId, "students", studentId, "behavior-logs"],
-          context.previousLogs
-        );
-      }
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete behavior log. Please try again.",
         variant: "destructive",
       });
     },
@@ -990,27 +871,7 @@ export default function StudentProfile() {
   });
 
   const handleViewLog = (log: any) => {
-    // Find category name from categoryId
-    const category = categories.find(cat => cat.id === log.categoryId);
-    // Add category name to log object for the details sheet
-    const logWithCategory = {
-      ...log,
-      category: category?.name || "Unknown"
-    };
-    setSelectedLog(logWithCategory);
-    setIsLogDetailsOpen(true);
-  };
-
-  const handleUpdateNotes = (id: string, notes: string) => {
-    updateBehaviorLog.mutate({ id, updates: { notes } });
-  };
-
-  const handleUpdateStrategies = (id: string, strategies: string) => {
-    updateBehaviorLog.mutate({ id, updates: { strategies } });
-  };
-
-  const handleDeleteLog = (id: string) => {
-    deleteBehaviorLog.mutate(id);
+    setLocation(`/behavior-logs/${log.id}`);
   };
 
   const handleViewAcademicLog = (log: any) => {
@@ -1451,15 +1312,6 @@ export default function StudentProfile() {
         onOpenChange={setIsAddLogDialogOpen}
         onSubmit={(data) => createBehaviorLog.mutate(data)}
         categories={categories}
-      />
-
-      <BehaviorLogDetailsSheet
-        open={isLogDetailsOpen}
-        onOpenChange={setIsLogDetailsOpen}
-        log={selectedLog}
-        onUpdateNotes={handleUpdateNotes}
-        onUpdateStrategies={handleUpdateStrategies}
-        onDelete={handleDeleteLog}
       />
 
       <AddTaskDialog
