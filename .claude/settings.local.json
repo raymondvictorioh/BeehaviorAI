@@ -17,7 +17,8 @@
       "Bash(npx tsc:*)",
       "Bash(lsof:*)",
       "Bash(xargs kill:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []
