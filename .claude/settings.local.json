@@ -19,7 +19,8 @@
       "Bash(xargs kill:*)",
       "WebSearch",
       "Bash(npm run:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []
