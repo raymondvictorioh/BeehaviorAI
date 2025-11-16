@@ -113,17 +113,11 @@ export function StudentSelector({
           </DialogHeader>
 
           <Command shouldFilter={false} className="rounded-lg border">
-            <div className="flex items-center border-b px-3">
-              <CommandInput
-                placeholder="Search students by name or email..."
-                value={searchQuery}
-                onValueChange={setSearchQuery}
-                className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border-0"
-              />
-              {isLoading && (
-                <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
-              )}
-            </div>
+            <CommandInput
+              placeholder="Search students by name or email..."
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+            />
             <CommandList className="max-h-[400px] overflow-y-auto">
               <CommandEmpty className="py-6 text-center text-sm">
                 {isLoading ? (
