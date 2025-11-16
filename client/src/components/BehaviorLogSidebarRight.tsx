@@ -1,116 +1,62 @@
-import { Calendar, Clock, User, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import { getLegacyBehaviorColor } from "@/lib/utils/colorUtils";
-import { formatDateTime } from "@/lib/utils/dateUtils";
-import type { BehaviorLog, BehaviorLogCategory } from "@shared/schema";
+import { BehaviorLogDetailsContent } from "@/components/BehaviorLogDetailsContent";
+import type { BehaviorLogCategory } from "@shared/schema";
+import type { BehaviorLogWithUser } from "@/lib/utils/userUtils";
 
 interface BehaviorLogSidebarRightProps {
-  log: BehaviorLog;
+  log: BehaviorLogWithUser;
   category: BehaviorLogCategory | undefined;
   onDelete: () => void;
 }
 
+/**
+ * @deprecated Use DetailSidebar with composition instead.
+ *
+ * This component will be removed in a future version.
+ *
+ * Migration example:
+ * ```tsx
+ * // Old (deprecated):
+ * <BehaviorLogSidebarRight log={log} category={category} onDelete={onDelete} />
+ *
+ * // New (recommended):
+ * import { DetailSidebar, DetailSidebarSection, DetailSidebarField } from "@/components/detail-sidebar";
+ *
+ * <DetailSidebar title="Details">
+ *   <DetailSidebarSection>
+ *     {/* Category badge, fields, actions *\/}
+ *   </DetailSidebarSection>
+ * </DetailSidebar>
+ * ```
+ *
+ * @see client/src/components/detail-sidebar
+ * @see client/src/pages/BehaviorLogDetail.tsx (for complete example)
+ */
 export function BehaviorLogSidebarRight({
   log,
   category,
   onDelete,
 }: BehaviorLogSidebarRightProps) {
-  const categoryColor = category?.color
-    ? getLegacyBehaviorColor(category.color)
-    : "bg-gray-500";
-
   return (
     <Sidebar
-      collapsible="none"
       side="right"
-      className="sticky top-0 hidden h-svh border-l lg:flex"
+      className="hidden lg:flex"
     >
-      <SidebarHeader className="border-sidebar-border border-b p-6">
+      <SidebarHeader className="h-16 flex items-center px-4 border-sidebar-border">
         <h2 className="text-lg font-semibold">Details</h2>
       </SidebarHeader>
 
       <SidebarContent className="p-6">
-        <div className="space-y-6">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className={`h-3 w-3 rounded-full ${categoryColor}`} />
-              <Badge
-                variant="secondary"
-                className="text-xs"
-                data-testid="text-detail-category"
-              >
-                {category?.name || "Unknown"}
-              </Badge>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">
-                  Incident Date
-                </Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span
-                    className="text-sm"
-                    data-testid="text-detail-incident-date"
-                  >
-                    {formatDateTime(log.incidentDate)}
-                  </span>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <Label className="text-xs text-muted-foreground">
-                  Logged By
-                </Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm" data-testid="text-detail-logged-by">
-                    {log.loggedBy}
-                  </span>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <Label className="text-xs text-muted-foreground">
-                  Logged At
-                </Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm" data-testid="text-detail-logged-at">
-                    {log.loggedAt ? formatDateTime(log.loggedAt) : "N/A"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BehaviorLogDetailsContent
+          log={log}
+          category={category}
+          onDelete={onDelete}
+        />
       </SidebarContent>
-
-      <SidebarFooter className="p-6">
-        <Button
-          variant="outline"
-          onClick={onDelete}
-          className="w-full text-destructive hover:text-destructive"
-          data-testid="button-delete-log"
-        >
-          <Trash2 className="h-4 w-4 mr-2" />
-          Delete Log
-        </Button>
-      </SidebarFooter>
     </Sidebar>
   );
 }

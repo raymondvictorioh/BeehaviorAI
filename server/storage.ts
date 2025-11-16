@@ -511,10 +511,27 @@ export class DatabaseStorage implements IStorage {
     return logs;
   }
 
-  async getBehaviorLog(id: string, organizationId: string): Promise<BehaviorLog | undefined> {
+  async getBehaviorLog(id: string, organizationId: string): Promise<any> {
     const [log] = await db
-      .select()
+      .select({
+        id: behaviorLogs.id,
+        organizationId: behaviorLogs.organizationId,
+        studentId: behaviorLogs.studentId,
+        categoryId: behaviorLogs.categoryId,
+        incidentDate: behaviorLogs.incidentDate,
+        notes: behaviorLogs.notes,
+        strategies: behaviorLogs.strategies,
+        loggedBy: behaviorLogs.loggedBy,
+        loggedAt: behaviorLogs.loggedAt,
+        loggedByUser: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
       .from(behaviorLogs)
+      .leftJoin(users, eq(behaviorLogs.loggedBy, users.email))
       .where(and(eq(behaviorLogs.id, id), eq(behaviorLogs.organizationId, organizationId)));
     return log;
   }

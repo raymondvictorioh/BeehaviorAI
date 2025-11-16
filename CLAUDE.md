@@ -990,7 +990,211 @@ When adding search/filters to a new page:
 - [ ] Verify filters work with sorting
 - [ ] Check empty states
 
-### 4. Naming Conventions
+### 4. Detail Sidebar Pattern (NEW - November 2025)
+
+**BeehaviorAI uses a standardized DetailSidebar component system for all detail pages, reducing boilerplate by 85-92%.**
+
+#### Component Architecture
+
+The DetailSidebar system uses a **composition pattern** with specialized field components:
+
+1. **DetailSidebar** (`components/detail-sidebar/DetailSidebar.tsx`)
+   - Main container with configurable title
+   - Fixed right sidebar on desktop (lg+)
+   - Hidden on mobile (used in tabs instead)
+
+2. **DetailSidebarSection** (`components/detail-sidebar/DetailSidebarSection.tsx`)
+   - Section wrapper with optional separator
+   - Groups related fields together
+
+3. **DetailSidebarActions** (`components/detail-sidebar/DetailSidebarActions.tsx`)
+   - Container for action buttons (delete, edit, etc.)
+
+4. **Specialized Field Components** - Reduce boilerplate from 7-13 lines to 1 line:
+   - **DateField** - Display dates with automatic formatting
+   - **UserField** - Display user with avatar and name
+   - **CategoryBadgeField** - Display category with colored dot and badge
+   - **TextField** - Display simple text values with optional icon
+
+5. **DetailSidebarField** (`components/detail-sidebar/DetailSidebarField.tsx`)
+   - Generic field component (used by specialized components)
+   - Auto-generates testIds from labels
+   - Conditional rendering for simple vs complex children
+
+#### Usage Pattern
+
+```typescript
+import {
+  DetailSidebar,
+  DetailSidebarSection,
+  DetailSidebarActions,
+  DateField,
+  UserField,
+  CategoryBadgeField,
+  TextField,
+} from "@/components/detail-sidebar";
+
+<DetailSidebar title="Details">
+  {/* Category Section */}
+  <DetailSidebarSection>
+    <CategoryBadgeField
+      category={category}
+      getColor={getLegacyBehaviorColor}
+      testId="text-detail-category"
+    />
+  </DetailSidebarSection>
+
+  {/* Metadata Section */}
+  <DetailSidebarSection withSeparator>
+    <DateField
+      label="Incident Date"
+      date={log.incidentDate}
+      testId="text-detail-incident-date"
+    />
+    <UserField
+      label="Logged By"
+      user={log.loggedByUser}
+      fallbackEmail={log.loggedBy}
+      testId="text-detail-logged-by"
+    />
+    <DateField
+      label="Logged At"
+      date={log.loggedAt}
+      icon={Clock}
+      testId="text-detail-logged-at"
+    />
+  </DetailSidebarSection>
+
+  {/* Actions Section */}
+  <DetailSidebarSection withSeparator>
+    <DetailSidebarActions>
+      <Button
+        variant="outline"
+        onClick={() => setShowDeleteDialog(true)}
+        className="w-full text-destructive"
+        data-testid="button-delete-log"
+      >
+        <Trash2 className="h-4 w-4 mr-2" />
+        Delete Log
+      </Button>
+    </DetailSidebarActions>
+  </DetailSidebarSection>
+</DetailSidebar>
+```
+
+#### Specialized Component APIs
+
+**DateField:**
+```typescript
+<DateField
+  label="Incident Date"
+  date={log.incidentDate}
+  icon={Calendar}  // Optional, defaults to Calendar
+  testId="text-detail-incident-date"  // Optional, auto-generated from label
+/>
+```
+
+**UserField:**
+```typescript
+<UserField
+  label="Logged By"
+  user={log.loggedByUser}  // { firstName?, lastName?, email? }
+  fallbackEmail={log.loggedBy}  // Used if user object missing
+  testId="text-detail-logged-by"
+/>
+```
+
+**CategoryBadgeField:**
+```typescript
+<CategoryBadgeField
+  category={category}  // { name, color }
+  getColor={getLegacyBehaviorColor}  // Optional color converter function
+  testId="text-detail-category"
+/>
+```
+
+**TextField:**
+```typescript
+<TextField
+  label="Subject"
+  value={subject?.name}
+  icon={BookOpen}  // Optional icon
+  placeholder="Not assigned"  // Optional, defaults to "N/A"
+  testId="text-detail-subject"
+/>
+```
+
+#### Boilerplate Reduction
+
+**Before (verbose):**
+```typescript
+// 13 lines for a user field
+<DetailSidebarField label="Logged By">
+  <div className="flex items-center gap-2">
+    <Avatar className="h-7 w-7">
+      <AvatarFallback className="text-xs">
+        {getInitials(log.loggedByUser?.firstName, log.loggedByUser?.lastName, log.loggedByUser?.email)}
+      </AvatarFallback>
+    </Avatar>
+    <span>
+      {getDisplayName(log.loggedByUser, log.loggedBy || "Unknown")}
+    </span>
+  </div>
+</DetailSidebarField>
+```
+
+**After (specialized component):**
+```typescript
+// 1 line - 92% reduction
+<UserField label="Logged By" user={log.loggedByUser} fallbackEmail={log.loggedBy} />
+```
+
+#### Auto-Generated Test IDs
+
+If `testId` is not provided, it's auto-generated from the label:
+```typescript
+label="Incident Date" → testId="text-detail-incident-date"
+label="Logged By" → testId="text-detail-logged-by"
+label="Subject Code" → testId="text-detail-subject-code"
+```
+
+#### When to Use Which Component
+
+| Component | Use Case | Example |
+|-----------|----------|---------|
+| **DateField** | Display dates/timestamps | Incident date, logged at, created at |
+| **UserField** | Display users with avatar | Logged by, created by, assigned to |
+| **CategoryBadgeField** | Display categories with colors | Behavior category, academic category |
+| **TextField** | Display simple text/numbers | Subject name, grade, score, status |
+| **DetailSidebarField** | Custom complex layouts | Only when specialized components don't fit |
+
+#### Migration from Old Pattern
+
+**Deprecated:** `BehaviorLogSidebarRight.tsx` (will be removed)
+
+**Migration steps:**
+1. Replace sidebar component with `DetailSidebar` wrapper
+2. Replace verbose fields with specialized components (DateField, UserField, etc.)
+3. Remove unused imports (Avatar, Badge, Calendar if only used in sidebar)
+4. Test that all testIds remain the same
+
+#### Benefits
+
+1. **Consistency:** Same sidebar structure across all detail pages
+2. **Boilerplate Reduction:** 85-92% less code per field
+3. **Type Safety:** Proper TypeScript interfaces for all props
+4. **Auto Test IDs:** Automatic generation from labels
+5. **Easy Extension:** Create new specialized components as needed
+6. **Maintainability:** Centralized component logic for all detail sidebars
+
+#### Example Pages Using This Pattern
+
+- **BehaviorLogDetail.tsx** ✅ - Complete implementation
+- **AcademicLogDetail.tsx** ⏳ - Planned
+- **TaskDetail.tsx** ⏳ - Planned
+- **MeetingDetail.tsx** ⏳ - Planned
+
+### 5. Naming Conventions
 
 #### Mutations
 - CREATE: `create{ResourceName}` (e.g., `createBehaviorLog`, `createStudent`)
@@ -1013,7 +1217,7 @@ Organization-scoped format:
 const tempId = `temp-${Date.now()}`;
 ```
 
-### 5. Form Management
+### 6. Form Management
 
 #### Pattern
 - Use `react-hook-form` for form state
@@ -1046,7 +1250,7 @@ const form = useForm<FormData>({
 </Form>
 ```
 
-### 6. Error Handling
+### 7. Error Handling
 
 #### User-Facing Errors
 - Always provide user-friendly messages
@@ -1086,7 +1290,7 @@ onError: (error: Error) => {
 }
 ```
 
-### 7. Dialog/Modal Management
+### 8. Dialog/Modal Management
 
 #### Pattern
 ```typescript
@@ -1107,7 +1311,7 @@ onError: (error, _vars, context) => {
 }
 ```
 
-### 8. TypeScript Best Practices
+### 9. TypeScript Best Practices
 
 - Use shared schema types from `shared/schema.ts`
 - Avoid `any` types - use proper typing

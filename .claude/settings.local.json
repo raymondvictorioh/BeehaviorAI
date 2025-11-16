@@ -18,7 +18,8 @@
       "Bash(lsof:*)",
       "Bash(xargs kill:*)",
       "WebSearch",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
