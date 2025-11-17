@@ -15,7 +15,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Form,
@@ -47,7 +46,8 @@ import {
   DetailSidebarActions,
   DateField,
   UserField,
-  CategoryBadgeField,
+  EditableCategoryField,
+  EditableDateField,
 } from "@/components/detail-sidebar";
 import type { BehaviorLog, BehaviorLogCategory, Student } from "@shared/schema";
 import { format } from "date-fns";
@@ -57,8 +57,10 @@ import { getLegacyBehaviorColor } from "@/lib/utils/colorUtils";
 
 // Form schema for updating behavior log
 const updateBehaviorLogSchema = z.object({
-  notes: z.string().min(1, "Incident notes are required"),
+  notes: z.string().min(1, "Incident notes are required").optional(),
   strategies: z.string().optional(),
+  categoryId: z.string().optional(),
+  incidentDate: z.date().optional(),
 });
 
 type UpdateBehaviorLogForm = z.infer<typeof updateBehaviorLogSchema>;
@@ -210,6 +212,16 @@ export default function BehaviorLogDetail() {
     setShowDeleteDialog(false);
   };
 
+  // Handler for updating category via inline editing
+  const handleUpdateCategory = (categoryId: string) => {
+    updateBehaviorLog.mutate({ categoryId });
+  };
+
+  // Handler for updating incident date via inline editing
+  const handleUpdateIncidentDate = (incidentDate: Date) => {
+    updateBehaviorLog.mutate({ incidentDate });
+  };
+
   const onSubmit = (data: UpdateBehaviorLogForm) => {
     updateBehaviorLog.mutate(data);
   };
@@ -325,27 +337,43 @@ export default function BehaviorLogDetail() {
           {/* Breadcrumb */}
           <Breadcrumb>
             <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  <Link href="/behavior-logs">Behavior Logs</Link>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              {student && cameFromStudent && (
+              {student && cameFromStudent ? (
                 <>
+                  {/* From student profile: Student Name > Behavior Logs > Date */}
                   <BreadcrumbItem>
                     <BreadcrumbLink asChild>
                       <Link href={`/students/${log.studentId}`}>{student.name}</Link>
                     </BreadcrumbLink>
                   </BreadcrumbItem>
                   <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbLink asChild>
+                      <Link href="/behavior-logs">Behavior Logs</Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>
+                      {format(new Date(log.incidentDate), "MMM d, yyyy")}
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </>
+              ) : (
+                <>
+                  {/* From behavior logs list: Behavior Logs > Date */}
+                  <BreadcrumbItem>
+                    <BreadcrumbLink asChild>
+                      <Link href="/behavior-logs">Behavior Logs</Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>
+                      {format(new Date(log.incidentDate), "MMM d, yyyy")}
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
                 </>
               )}
-              <BreadcrumbItem>
-                <BreadcrumbPage>
-                  {format(new Date(log.incidentDate), "MMM d, yyyy")}
-                </BreadcrumbPage>
-              </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
 
@@ -378,15 +406,20 @@ export default function BehaviorLogDetail() {
 
         <DetailSidebar title="Details">
           <DetailSidebarSection withSeparator>
-          <CategoryBadgeField
+            <EditableCategoryField
               label="Category"
               category={category}
+              categories={categories}
               getColor={getLegacyBehaviorColor}
+              onUpdate={handleUpdateCategory}
+              isUpdating={updateBehaviorLog.isPending}
               testId="text-detail-category"
             />
-            <DateField
+            <EditableDateField
               label="Incident Date"
               date={log.incidentDate}
+              onUpdate={handleUpdateIncidentDate}
+              isUpdating={updateBehaviorLog.isPending}
               testId="text-detail-incident-date"
             />
             <UserField

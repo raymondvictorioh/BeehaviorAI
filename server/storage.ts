@@ -1239,10 +1239,53 @@ export class DatabaseStorage implements IStorage {
     return logs;
   }
 
-  async getAcademicLog(id: string, organizationId: string): Promise<AcademicLog | undefined> {
+  async getAcademicLog(id: string, organizationId: string): Promise<any> {
     const [log] = await db
-      .select()
+      .select({
+        id: academicLogs.id,
+        organizationId: academicLogs.organizationId,
+        studentId: academicLogs.studentId,
+        subjectId: academicLogs.subjectId,
+        categoryId: academicLogs.categoryId,
+        assessmentDate: academicLogs.assessmentDate,
+        grade: academicLogs.grade,
+        score: academicLogs.score,
+        notes: academicLogs.notes,
+        loggedBy: academicLogs.loggedBy,
+        loggedAt: academicLogs.loggedAt,
+        student: {
+          id: students.id,
+          name: students.name,
+          email: students.email,
+          classId: students.classId,
+        },
+        subject: {
+          id: subjects.id,
+          name: subjects.name,
+          code: subjects.code,
+        },
+        category: {
+          id: academicLogCategories.id,
+          name: academicLogCategories.name,
+          color: academicLogCategories.color,
+        },
+        class: {
+          id: classes.id,
+          name: classes.name,
+        },
+        loggedByUser: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
       .from(academicLogs)
+      .leftJoin(students, eq(academicLogs.studentId, students.id))
+      .leftJoin(subjects, eq(academicLogs.subjectId, subjects.id))
+      .leftJoin(academicLogCategories, eq(academicLogs.categoryId, academicLogCategories.id))
+      .leftJoin(classes, eq(students.classId, classes.id))
+      .leftJoin(users, eq(academicLogs.loggedBy, users.email))
       .where(and(eq(academicLogs.id, id), eq(academicLogs.organizationId, organizationId)));
     return log;
   }

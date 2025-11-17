@@ -10,5 +10,10 @@ export { UserField } from "./UserField";
 export { CategoryBadgeField } from "./CategoryBadgeField";
 export { TextField } from "./TextField";
 
+// Editable field components
+export { EditableCategoryField } from "./EditableCategoryField";
+export { EditableDateField } from "./EditableDateField";
+export { EditableSubjectField } from "./EditableSubjectField";
+
 // Types
 export type { DetailEntity, DetailMetadata, DetailCategory } from "./types";

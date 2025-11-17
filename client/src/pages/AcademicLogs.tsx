@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { format } from "date-fns";
+import { useLocation } from "wouter";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AcademicLogDetailsSheet } from "@/components/AcademicLogDetailsSheet";
 import { AddAcademicLogDialog } from "@/components/AddAcademicLogDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -35,15 +34,12 @@ type Class = {
 export default function AcademicLogs() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const orgId = user?.organizations?.[0]?.id;
 
   // Date filter states (for custom date range filtering)
   const [fromDate, setFromDate] = useState<Date | undefined>();
   const [toDate, setToDate] = useState<Date | undefined>();
-
-  // Details sheet states
-  const [selectedLog, setSelectedLog] = useState<any>(null);
-  const [isLogDetailsOpen, setIsLogDetailsOpen] = useState(false);
 
   // Add log dialog state
   const [isAddLogDialogOpen, setIsAddLogDialogOpen] = useState(false);
@@ -73,52 +69,7 @@ export default function AcademicLogs() {
     enabled: !!orgId,
   });
 
-  // Update academic log mutation
-  const updateAcademicLog = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<AcademicLog> }) => {
-      const res = await apiRequest("PATCH", `/api/organizations/${orgId}/academic-logs/${id}`, updates);
-      return await res.json();
-    },
-    onMutate: async ({ id, updates }) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "academic-logs"] });
-      const previousLogs = queryClient.getQueryData(["/api/organizations", orgId, "academic-logs"]);
-
-      queryClient.setQueryData(["/api/organizations", orgId, "academic-logs"], (old: any[]) =>
-        old.map((log) => (log.id === id ? { ...log, ...updates } : log))
-      );
-
-      if (selectedLog && selectedLog.id === id) {
-        setSelectedLog((prev: any) => ({ ...prev, ...updates }));
-      }
-
-      return { previousLogs };
-    },
-    onSuccess: () => {
-      toast({
-        title: "Academic log updated",
-        description: "Changes saved successfully.",
-      });
-    },
-    onError: (_error, _vars, context) => {
-      queryClient.setQueryData(["/api/organizations", orgId, "academic-logs"], context?.previousLogs);
-      toast({
-        title: "Failed to update",
-        description: "Could not save changes. Please try again.",
-        variant: "destructive",
-      });
-    },
-    onSettled: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "academic-logs"] });
-      // Invalidate student-specific query if we can find the log
-      const logs = queryClient.getQueryData(["/api/organizations", orgId, "academic-logs"]) as any[];
-      const log = logs?.find((l) => l.id === variables.id);
-      if (log?.studentId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "students", log.studentId, "academic-logs"] });
-      }
-    },
-  });
-
-  // Delete academic log mutation
+  // Delete academic log mutation (kept for potential bulk delete in future)
   const deleteAcademicLog = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/organizations/${orgId}/academic-logs/${id}`);
@@ -130,11 +81,6 @@ export default function AcademicLogs() {
       queryClient.setQueryData(["/api/organizations", orgId, "academic-logs"], (old: any[]) =>
         old.filter((log) => log.id !== id)
       );
-
-      if (selectedLog && selectedLog.id === id) {
-        setIsLogDetailsOpen(false);
-        setSelectedLog(null);
-      }
 
       return { previousLogs };
     },
@@ -288,37 +234,8 @@ export default function AcademicLogs() {
 
   // Academic log handlers
   const handleViewLog = (log: AcademicLog) => {
-    // Find subject name and category details from IDs
-    const subject = subjects.find(s => s.id === log.subjectId);
-    const category = categories.find(c => c.id === log.categoryId);
-
-    // Add subject and category details to log object for the details sheet
-    const logWithDetails = {
-      ...log,
-      assessmentDate: format(new Date(log.assessmentDate), "yyyy-MM-dd"),
-      loggedAt: log.loggedAt ? format(new Date(log.loggedAt), "yyyy-MM-dd HH:mm:ss") : "",
-      subject: subject?.name || "Unknown",
-      category: category?.name || "Unknown",
-      categoryColor: category?.color || null,
-    };
-    setSelectedLog(logWithDetails);
-    setIsLogDetailsOpen(true);
-  };
-
-  const handleUpdateGrade = (id: string, grade: string) => {
-    updateAcademicLog.mutate({ id, updates: { grade } });
-  };
-
-  const handleUpdateScore = (id: string, score: string) => {
-    updateAcademicLog.mutate({ id, updates: { score } });
-  };
-
-  const handleUpdateNotes = (id: string, notes: string) => {
-    updateAcademicLog.mutate({ id, updates: { notes } });
-  };
-
-  const handleDeleteLog = (id: string) => {
-    deleteAcademicLog.mutate(id);
+    // Navigate to detail page
+    setLocation(`/academic-logs/${log.id}`);
   };
 
   const handleCreateLog = (data: any) => {
@@ -395,17 +312,6 @@ export default function AcademicLogs() {
             onToDateChange={setToDate}
           />
         )}
-      />
-
-      {/* Academic Log Details Sheet */}
-      <AcademicLogDetailsSheet
-        open={isLogDetailsOpen}
-        onOpenChange={setIsLogDetailsOpen}
-        log={selectedLog}
-        onUpdateGrade={handleUpdateGrade}
-        onUpdateScore={handleUpdateScore}
-        onUpdateNotes={handleUpdateNotes}
-        onDelete={handleDeleteLog}
       />
 
       {/* Add Academic Log Dialog */}

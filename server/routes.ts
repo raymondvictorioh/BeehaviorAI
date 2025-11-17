@@ -535,7 +535,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/organizations/:orgId/behavior-logs/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, id } = req.params;
-      const log = await storage.updateBehaviorLog(id, orgId, req.body);
+
+      // Prepare update data with date conversion if needed
+      const updateData = { ...req.body };
+
+      // Convert incidentDate string to Date object if provided
+      if (updateData.incidentDate !== undefined && updateData.incidentDate) {
+        updateData.incidentDate = new Date(updateData.incidentDate);
+      }
+
+      const log = await storage.updateBehaviorLog(id, orgId, updateData);
       res.json(log);
     } catch (error) {
       console.error("Error updating behavior log:", error);
@@ -983,6 +992,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching organization academic logs:", error);
       res.status(500).json({ message: "Failed to fetch academic logs" });
+    }
+  });
+
+  // Get single academic log by ID
+  app.get("/api/organizations/:orgId/academic-logs/:id", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId, id } = req.params;
+      const log = await storage.getAcademicLog(id, orgId);
+      if (!log) {
+        return res.status(404).json({ message: "Academic log not found" });
+      }
+      res.json(log);
+    } catch (error) {
+      console.error("Error fetching academic log:", error);
+      res.status(500).json({ message: "Failed to fetch academic log" });
     }
   });
 
