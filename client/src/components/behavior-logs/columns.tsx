@@ -45,7 +45,7 @@ export const columns: ColumnDef<BehaviorLog>[] = [
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           className="-ml-4"
         >
-          Date
+          Date & Time
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       );
@@ -53,7 +53,10 @@ export const columns: ColumnDef<BehaviorLog>[] = [
     cell: ({ row }: { row: Row<BehaviorLog> }) => {
       return (
         <div className="whitespace-nowrap">
-          {format(new Date(row.getValue("incidentDate")), "MMM d, yyyy")}
+          <div>{format(new Date(row.getValue("incidentDate")), "MMM d, yyyy")}</div>
+          <div className="text-xs text-muted-foreground">
+            {format(new Date(row.getValue("incidentDate")), "h:mm a")}
+          </div>
         </div>
       );
     },
@@ -177,24 +180,6 @@ export const columns: ColumnDef<BehaviorLog>[] = [
     filterFn: (row: Row<BehaviorLog>, id: string, value: string) => {
       const notes = row.getValue(id) as string;
       return notes.toLowerCase().includes(value.toLowerCase());
-    },
-  },
-  {
-    accessorKey: "strategies",
-    id: "strategies",
-    header: "Strategies",
-    cell: ({ row }: { row: Row<BehaviorLog> }) => {
-      const strategies = row.getValue("strategies") as string | null;
-      if (!strategies) {
-        return <span className="text-muted-foreground">-</span>;
-      }
-      return (
-        <div className="max-w-md">
-          <div className="truncate" title={strategies}>
-            {strategies}
-          </div>
-        </div>
-      );
     },
   },
   {
