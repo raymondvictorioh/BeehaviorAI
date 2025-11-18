@@ -6,7 +6,6 @@ import { format } from "date-fns";
 import { List, Plus, Users, ClipboardList, BookOpen, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/ui/data-table";
 import { CreateListDialog } from "@/components/CreateListDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -59,7 +58,6 @@ export default function Lists() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [deleteListId, setDeleteListId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"all" | "mine" | "shared">("all");
 
   // Fetch lists
   const { data: lists = [], isLoading } = useQuery<ListWithItemCount[]>({
@@ -163,22 +161,11 @@ export default function Lists() {
     },
   });
 
-  // Filter lists based on search and active tab
+  // Filter lists based on search (only show user's own lists)
   const filteredLists = lists.filter((list) => {
     const matchesSearch = list.name.toLowerCase().includes(searchQuery.toLowerCase());
-    if (!matchesSearch) return false;
-
-    if (activeTab === "mine") {
-      return list.createdBy === userId;
-    } else if (activeTab === "shared") {
-      return list.createdBy !== userId;
-    }
-    return true;
+    return matchesSearch && list.createdBy === userId;
   });
-
-  // Get counts for tabs
-  const myListsCount = lists.filter((l) => l.createdBy === userId).length;
-  const sharedListsCount = lists.filter((l) => l.createdBy !== userId).length;
 
   const getListTypeIcon = (type: ListType) => {
     switch (type) {
@@ -322,15 +309,8 @@ export default function Lists() {
         {/* Search Input Skeleton */}
         <div className="h-10 w-full max-w-sm bg-muted animate-pulse rounded" />
 
-        {/* Tabs Skeleton */}
-        <div className="flex gap-2">
-          <div className="h-10 w-32 bg-muted animate-pulse rounded" />
-          <div className="h-10 w-32 bg-muted animate-pulse rounded" />
-          <div className="h-10 w-40 bg-muted animate-pulse rounded" />
-        </div>
-
         {/* DataTable Skeleton */}
-        <div className="rounded-md border bg-card mt-6">
+        <div className="rounded-md border bg-card">
           <div className="h-12 bg-muted/50 animate-pulse rounded-t-md border-b" />
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} className="h-16 border-b last:border-0 bg-muted/30 animate-pulse" />
@@ -345,7 +325,7 @@ export default function Lists() {
       <div className="flex h-full flex-1 flex-col space-y-8 p-8">
       <PageHeader
         title="Lists"
-        description="Organize students, behavior logs, and academic logs into custom collections"
+        description="Create and organize your custom lists of students, behavior logs, and academic logs"
         action={
           <Button onClick={() => setIsCreateDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -363,47 +343,29 @@ export default function Lists() {
           className="max-w-sm"
         />
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-          <TabsList>
-            <TabsTrigger value="all">
-              All Lists ({lists.length})
-            </TabsTrigger>
-            <TabsTrigger value="mine">
-              My Lists ({myListsCount})
-            </TabsTrigger>
-            <TabsTrigger value="shared">
-              Shared with Me ({sharedListsCount})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value={activeTab} className="mt-6">
-            {filteredLists.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 border rounded-lg bg-card">
-                <List className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No lists found</h3>
-                <p className="text-muted-foreground text-center mb-4">
-                  {searchQuery
-                    ? "Try adjusting your search query"
-                    : activeTab === "mine"
-                    ? "Create your first list to get started"
-                    : "No lists have been shared with you yet"}
-                </p>
-                {!searchQuery && activeTab === "mine" && (
-                  <Button onClick={() => setIsCreateDialogOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create List
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <DataTable
-                columns={columns}
-                data={filteredLists}
-                onRowClick={handleRowClick}
-              />
+        {filteredLists.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 border rounded-lg bg-card">
+            <List className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No lists found</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              {searchQuery
+                ? "Try adjusting your search query"
+                : "Create your first list to get started"}
+            </p>
+            {!searchQuery && (
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create List
+              </Button>
             )}
-          </TabsContent>
-        </Tabs>
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={filteredLists}
+            onRowClick={handleRowClick}
+          />
+        )}
       </div>
 
       <CreateListDialog

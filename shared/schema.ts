@@ -128,6 +128,7 @@ export const behaviorLogs = pgTable("behavior_logs", {
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   studentId: varchar("student_id").notNull().references(() => students.id),
   categoryId: varchar("category_id").notNull().references(() => behaviorLogCategories.id, { onDelete: "restrict" }),
+  classId: varchar("class_id").references(() => classes.id),
   incidentDate: timestamp("incident_date").notNull(),
   notes: text("notes").notNull(),
   strategies: text("strategies"),
@@ -282,6 +283,7 @@ export const academicLogs = pgTable("academic_logs", {
   studentId: varchar("student_id").notNull().references(() => students.id, { onDelete: "cascade" }),
   subjectId: varchar("subject_id").notNull().references(() => subjects.id, { onDelete: "restrict" }),
   categoryId: varchar("category_id").notNull().references(() => academicLogCategories.id, { onDelete: "restrict" }),
+  classId: varchar("class_id").references(() => classes.id),
   assessmentDate: timestamp("assessment_date").notNull(),
   grade: varchar("grade", { length: 20 }), // Optional: "A", "B+", "Pass", etc.
   score: varchar("score", { length: 50 }), // Optional: "85%", "90/100", "4.0", etc.

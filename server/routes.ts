@@ -772,10 +772,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/organizations/:orgId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId } = req.params;
+
+      // Fetch student to get their classId
+      const student = await storage.getStudent(req.body.studentId, orgId);
+
       const log = await storage.createBehaviorLog({
         organizationId: orgId,
         studentId: req.body.studentId,
         categoryId: req.body.categoryId,
+        classId: student?.classId || null,
         notes: req.body.notes,
         incidentDate: req.body.incidentDate ? new Date(req.body.incidentDate) : new Date(),
         loggedBy: req.body.loggedBy || "Unknown",
@@ -808,10 +813,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/organizations/:orgId/students/:studentId/behavior-logs", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {
       const { orgId, studentId } = req.params;
+
+      // Fetch student to get their classId
+      const student = await storage.getStudent(studentId, orgId);
+
       const log = await storage.createBehaviorLog({
         organizationId: orgId,
         studentId,
         categoryId: req.body.categoryId,
+        classId: student?.classId || null,
         notes: req.body.notes,
         incidentDate: req.body.incidentDate ? new Date(req.body.incidentDate) : new Date(),
         loggedBy: req.body.loggedBy || "Unknown",
@@ -1363,9 +1373,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { orgId } = req.params;
       const user = req.user;
 
+      // Fetch student to get their classId
+      const student = await storage.getStudent(req.body.studentId, orgId);
+
       const logData = {
         ...req.body,
         organizationId: orgId,
+        classId: student?.classId || null,
         assessmentDate: req.body.assessmentDate ? new Date(req.body.assessmentDate) : new Date(),
         loggedBy: user?.email || "Unknown",
       };
@@ -1402,10 +1416,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { orgId, studentId } = req.params;
       const user = req.user;
 
+      // Fetch student to get their classId
+      const student = await storage.getStudent(studentId, orgId);
+
       const logData = {
         ...req.body,
         organizationId: orgId,
         studentId,
+        classId: student?.classId || null,
         assessmentDate: req.body.assessmentDate ? new Date(req.body.assessmentDate) : new Date(),
         loggedBy: user?.email || "Unknown",
       };

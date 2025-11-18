@@ -6,6 +6,7 @@ import { Row } from "@tanstack/react-table";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getDisplayName } from "@/lib/utils/userUtils";
 
 export type BehaviorLog = {
   id: string;
@@ -31,6 +32,12 @@ export type BehaviorLog = {
   class?: {
     id: string;
     name: string;
+  } | null;
+  loggedByUser?: {
+    id: string;
+    email: string | null;
+    firstName: string | null;
+    lastName: string | null;
   } | null;
 };
 
@@ -155,7 +162,7 @@ export const columns: ColumnDef<BehaviorLog>[] = [
       if (!hasClass) {
         return <span className="text-muted-foreground">-</span>;
       }
-      return <span>{className || "Unknown Class"}</span>;
+      return <span>{className || "-"}</span>;
     },
     filterFn: (row: Row<BehaviorLog>, id: string, value: string[]) => {
       // For class filtering, we need to match against the student's classId
@@ -187,7 +194,11 @@ export const columns: ColumnDef<BehaviorLog>[] = [
     id: "loggedBy",
     header: "Logged By",
     cell: ({ row }: { row: Row<BehaviorLog> }) => {
-      return <div className="whitespace-nowrap">{row.getValue("loggedBy")}</div>;
+      const loggedByUser = row.original.loggedByUser;
+      const loggedByEmail = row.getValue("loggedBy") as string;
+      const displayName = getDisplayName(loggedByUser, loggedByEmail);
+
+      return <div className="whitespace-nowrap">{displayName}</div>;
     },
   },
 ];

@@ -6,6 +6,7 @@ import { Row } from "@tanstack/react-table";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getDisplayName } from "@/lib/utils/userUtils";
 
 export type AcademicLog = {
   id: string;
@@ -39,6 +40,12 @@ export type AcademicLog = {
     id: string;
     name: string;
   } | null;
+  loggedByUser?: {
+    id: string;
+    email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
 };
 
 export const columns: ColumnDef<AcademicLog>[] = [
@@ -52,7 +59,7 @@ export const columns: ColumnDef<AcademicLog>[] = [
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           className="-ml-4"
         >
-          Date
+          Date & Time
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       );
@@ -60,7 +67,10 @@ export const columns: ColumnDef<AcademicLog>[] = [
     cell: ({ row }: { row: Row<AcademicLog> }) => {
       return (
         <div className="whitespace-nowrap">
-          {format(new Date(row.getValue("assessmentDate")), "MMM d, yyyy")}
+          <div>{format(new Date(row.getValue("assessmentDate")), "MMM d, yyyy")}</div>
+          <div className="text-xs text-muted-foreground">
+            {format(new Date(row.getValue("assessmentDate")), "h:mm a")}
+          </div>
         </div>
       );
     },
@@ -218,7 +228,7 @@ export const columns: ColumnDef<AcademicLog>[] = [
       if (!hasClass) {
         return <span className="text-muted-foreground">-</span>;
       }
-      return <span>{className || "Unknown Class"}</span>;
+      return <span>{className || "-"}</span>;
     },
   },
   {
@@ -245,7 +255,11 @@ export const columns: ColumnDef<AcademicLog>[] = [
     id: "loggedBy",
     header: "Logged By",
     cell: ({ row }: { row: Row<AcademicLog> }) => {
-      return <div className="whitespace-nowrap">{row.getValue("loggedBy")}</div>;
+      const loggedByUser = row.original.loggedByUser;
+      const loggedByEmail = row.getValue("loggedBy") as string;
+      const displayName = getDisplayName(loggedByUser, loggedByEmail);
+
+      return <div className="whitespace-nowrap">{displayName}</div>;
     },
   },
 ];

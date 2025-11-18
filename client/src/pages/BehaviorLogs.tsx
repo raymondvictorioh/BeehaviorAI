@@ -42,6 +42,12 @@ type BehaviorLog = {
     id: string;
     name: string;
   } | null;
+  loggedByUser?: {
+    id: string;
+    email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
 };
 
 type BehaviorLogCategory = {

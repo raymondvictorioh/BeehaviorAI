@@ -20,10 +20,13 @@ export default function Reports() {
   const [fromDate, setFromDate] = useState<Date | undefined>(startOfMonth(new Date()));
   const [toDate, setToDate] = useState<Date | undefined>(new Date());
 
-  // Format dates to YYYY-MM-DD for API
+  // Format dates to YYYY-MM-DD for API (using local timezone, not UTC)
   const formatDateForAPI = (date: Date | undefined): string | undefined => {
     if (!date) return undefined;
-    return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const fromDateParam = formatDateForAPI(fromDate);

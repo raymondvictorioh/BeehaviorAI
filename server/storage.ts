@@ -488,7 +488,7 @@ export class DatabaseStorage implements IStorage {
       .from(behaviorLogs)
       .leftJoin(students, eq(behaviorLogs.studentId, students.id))
       .leftJoin(behaviorLogCategories, eq(behaviorLogs.categoryId, behaviorLogCategories.id))
-      .leftJoin(classes, eq(students.classId, classes.id))
+      .leftJoin(classes, eq(behaviorLogs.classId, classes.id))
       .where(and(eq(behaviorLogs.studentId, studentId), eq(behaviorLogs.organizationId, organizationId)))
       .orderBy(behaviorLogs.incidentDate);
 
@@ -522,11 +522,18 @@ export class DatabaseStorage implements IStorage {
           id: classes.id,
           name: classes.name,
         },
+        loggedByUser: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
       })
       .from(behaviorLogs)
       .leftJoin(students, eq(behaviorLogs.studentId, students.id))
       .leftJoin(behaviorLogCategories, eq(behaviorLogs.categoryId, behaviorLogCategories.id))
-      .leftJoin(classes, eq(students.classId, classes.id))
+      .leftJoin(classes, eq(behaviorLogs.classId, classes.id))
+      .leftJoin(users, eq(behaviorLogs.loggedBy, users.email))
       .where(eq(behaviorLogs.organizationId, organizationId))
       .orderBy(behaviorLogs.incidentDate);
 
@@ -1249,12 +1256,19 @@ export class DatabaseStorage implements IStorage {
           id: classes.id,
           name: classes.name,
         },
+        loggedByUser: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
       })
       .from(academicLogs)
       .leftJoin(students, eq(academicLogs.studentId, students.id))
       .leftJoin(subjects, eq(academicLogs.subjectId, subjects.id))
       .leftJoin(academicLogCategories, eq(academicLogs.categoryId, academicLogCategories.id))
-      .leftJoin(classes, eq(students.classId, classes.id))
+      .leftJoin(classes, eq(academicLogs.classId, classes.id))
+      .leftJoin(users, eq(academicLogs.loggedBy, users.email))
       .where(eq(academicLogs.organizationId, organizationId))
       .orderBy(academicLogs.assessmentDate);
 
@@ -1306,7 +1320,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(students, eq(academicLogs.studentId, students.id))
       .leftJoin(subjects, eq(academicLogs.subjectId, subjects.id))
       .leftJoin(academicLogCategories, eq(academicLogs.categoryId, academicLogCategories.id))
-      .leftJoin(classes, eq(students.classId, classes.id))
+      .leftJoin(classes, eq(academicLogs.classId, classes.id))
       .leftJoin(users, eq(academicLogs.loggedBy, users.email))
       .where(and(eq(academicLogs.id, id), eq(academicLogs.organizationId, organizationId)));
     return log;
@@ -1896,7 +1910,7 @@ export class DatabaseStorage implements IStorage {
       conditions.push(lte(behaviorLogs.incidentDate, endDate));
     }
 
-    // Get counts by class (through students)
+    // Get counts by class (using behavior log's frozen classId)
     const results = await db
       .select({
         classId: classes.id,
@@ -1904,8 +1918,7 @@ export class DatabaseStorage implements IStorage {
         count: count(),
       })
       .from(behaviorLogs)
-      .leftJoin(students, eq(behaviorLogs.studentId, students.id))
-      .leftJoin(classes, eq(students.classId, classes.id))
+      .leftJoin(classes, eq(behaviorLogs.classId, classes.id))
       .where(and(...conditions))
       .groupBy(classes.id, classes.name)
       .orderBy(desc(count()));
