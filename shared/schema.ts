@@ -443,3 +443,29 @@ export const updateInvitationSchema = insertInvitationSchema.partial();
 
 export type Invitation = typeof invitations.$inferSelect;
 export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
+// Report Types
+export type BehaviorLogCategoryStats = {
+  id: string;
+  name: string;
+  color: string | null;
+  count: number;
+  percentage: number;
+};
+
+export type BehaviorLogOverviewStats = {
+  total: number;
+  byCategory: BehaviorLogCategoryStats[];
+};
+
+export type BehaviorLogCategoryReport = {
+  categoryId: string;
+  categoryName: string;
+  categoryColor: string | null;
+  count: number;
+};
+
+export type BehaviorLogClassReport = {
+  classId: string;
+  className: string;
+  count: number;
+};
