@@ -15,6 +15,7 @@ import {
   lists,
   listItems,
   listShares,
+  invitations,
   type User,
   type UpsertUser,
   type Organization,
@@ -47,6 +48,8 @@ import {
   type InsertListItem,
   type ListShare,
   type InsertListShare,
+  type Invitation,
+  type InsertInvitation,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, ne, sql, inArray, or, like } from "drizzle-orm";
@@ -159,6 +162,17 @@ export interface IStorage {
   getListShares(listId: string, userId: string): Promise<ListShare[]>;
   shareList(listId: string, sharedWithUserId: string, userId: string, organizationId: string): Promise<ListShare>;
   unshareList(listId: string, sharedWithUserId: string, userId: string): Promise<void>;
+
+  // Invitation operations
+  createInvitation(invitation: InsertInvitation): Promise<Invitation>;
+  getInvitations(organizationId: string, status?: string): Promise<Invitation[]>;
+  getInvitationByToken(token: string): Promise<Invitation | undefined>;
+  updateInvitationStatus(id: string, status: string, timestamp?: Date): Promise<Invitation>;
+  deleteInvitation(id: string, organizationId: string): Promise<void>;
+
+  // User Role operations
+  getUserRole(userId: string, organizationId: string): Promise<{ role: string } | undefined>;
+  removeUserFromOrganization(userId: string, organizationId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1666,6 +1680,92 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(listShares)
       .where(and(eq(listShares.listId, listId), eq(listShares.sharedWithUserId, sharedWithUserId)));
+  }
+
+  // Invitation operations
+  async createInvitation(invitation: InsertInvitation): Promise<Invitation> {
+    const [newInvitation] = await db
+      .insert(invitations)
+      .values(invitation)
+      .returning();
+
+    return newInvitation;
+  }
+
+  async getInvitations(organizationId: string, status?: string): Promise<Invitation[]> {
+    const conditions = [eq(invitations.organizationId, organizationId)];
+
+    if (status) {
+      conditions.push(eq(invitations.status, status));
+    }
+
+    return await db
+      .select()
+      .from(invitations)
+      .where(and(...conditions))
+      .orderBy(sql`${invitations.createdAt} DESC`);
+  }
+
+  async getInvitationByToken(token: string): Promise<Invitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(eq(invitations.token, token));
+
+    return invitation;
+  }
+
+  async updateInvitationStatus(id: string, status: string, timestamp?: Date): Promise<Invitation> {
+    const updateData: any = { status };
+
+    // Set appropriate timestamp based on status
+    if (status === "accepted" && timestamp) {
+      updateData.acceptedAt = timestamp;
+    } else if (status === "declined" && timestamp) {
+      updateData.declinedAt = timestamp;
+    } else if (status === "revoked" && timestamp) {
+      updateData.revokedAt = timestamp;
+    }
+
+    const [updatedInvitation] = await db
+      .update(invitations)
+      .set(updateData)
+      .where(eq(invitations.id, id))
+      .returning();
+
+    return updatedInvitation;
+  }
+
+  async deleteInvitation(id: string, organizationId: string): Promise<void> {
+    await db
+      .delete(invitations)
+      .where(and(eq(invitations.id, id), eq(invitations.organizationId, organizationId)));
+  }
+
+  // User Role operations
+  async getUserRole(userId: string, organizationId: string): Promise<{ role: string } | undefined> {
+    const [orgUser] = await db
+      .select({ role: organizationUsers.role })
+      .from(organizationUsers)
+      .where(
+        and(
+          eq(organizationUsers.userId, userId),
+          eq(organizationUsers.organizationId, organizationId)
+        )
+      );
+
+    return orgUser;
+  }
+
+  async removeUserFromOrganization(userId: string, organizationId: string): Promise<void> {
+    await db
+      .delete(organizationUsers)
+      .where(
+        and(
+          eq(organizationUsers.userId, userId),
+          eq(organizationUsers.organizationId, organizationId)
+        )
+      );
   }
 }
 

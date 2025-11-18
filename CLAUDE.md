@@ -41,7 +41,8 @@ BeehaviorAI is a SaaS application for school behavior management, designed to he
 - Report generation for students and classes
 - Real-time AI assistant for contextual help
 - Student resources management with links
-- **Academic logs system** for tracking student academic performance (NEW)
+- **Academic logs system** for tracking student academic performance
+- **User invitation system** for inviting new users with role-based access control (NEW)
 
 ### Academic Logs System
 
@@ -187,7 +188,184 @@ All storage methods follow the same pattern as behavior logs:
 - Organization-scoped data isolation
 - Foreign key constraints prevent orphaned records
 
+### User Invitation System
+
+**Purpose:** Allow administrators to invite new users to join their organization with role-based access control (RBAC). Supports email-based invitations with secure tokens and automatic expiration.
+
+**Components:**
+
+1. **Roles** - Three-tier role system for organization access control
+   - **Admin**: Full access to all features, can invite users, manage organization
+   - **Teacher**: Can manage students, create logs, view assigned data
+   - **Staff**: Read-only access to organization data
+
+2. **Invitations** - Secure email-based invitation system
+   - Unique token-based URLs valid for 7 days
+   - Status tracking: pending, accepted, declined, revoked
+   - Email delivery via Resend API
+   - Optional personal message from inviter
+   - Prevents duplicate pending invitations (unique constraint)
+
+3. **User Management** - Organization user administration
+   - View all users with roles
+   - Remove users from organization
+   - Protection: Cannot remove last admin
+   - Automatic cleanup when users are removed
+
+**Database Schema:**
+
+```typescript
+// Invitations table
+invitations {
+  id: varchar (UUID)
+  organizationId: varchar (FK → organizations, cascade delete)
+  email: varchar(255) NOT NULL
+  role: varchar(50) NOT NULL // "admin" | "teacher" | "staff"
+  token: varchar(255) UNIQUE NOT NULL
+  status: varchar(50) DEFAULT "pending" // pending, accepted, declined, revoked
+  invitedBy: varchar (FK → users, nullable)
+  message: text NULLABLE
+  expiresAt: timestamp NOT NULL
+  createdAt: timestamp DEFAULT NOW()
+  acceptedAt: timestamp NULLABLE
+  declinedAt: timestamp NULLABLE
+  revokedAt: timestamp NULLABLE
+}
+
+// Unique constraint: one pending invitation per email per organization
+uniqueIndex("unique_pending_invitation")
+  .on(organizationId, email)
+  .where(status = 'pending')
+```
+
+**Database Relationships:**
+- **Organization deletion** → Invitations deleted (cascade)
+- **User deletion** → Invitation invitedBy set to null (nullable FK)
+
+**API Endpoints:**
+
+*Invitations:*
+- `POST /api/organizations/:orgId/invitations` - Create invitation (admin only)
+- `GET /api/organizations/:orgId/invitations` - List all invitations (admin only)
+- `POST /api/organizations/:orgId/invitations/:id/resend` - Resend invitation (admin only)
+- `DELETE /api/organizations/:orgId/invitations/:id` - Delete invitation (admin only)
+- `GET /api/invitations/validate/:token` - Validate invitation token (public)
+- `POST /api/invitations/:token/accept` - Accept invitation (authenticated)
+
+*User Management:*
+- `GET /api/organizations/:orgId/users` - List organization users
+- `DELETE /api/organizations/:orgId/users/:userId` - Remove user (admin only)
+
+**Query Key Convention:**
+```typescript
+// Invitations
+["/api/organizations", orgId, "invitations"]
+
+// Organization Users
+["/api/organizations", orgId, "users"]
+```
+
+**RBAC Middleware:**
+```typescript
+// Protect routes with role requirements
+requireRole(["admin"]) // Only admins
+requireRole(["admin", "teacher"]) // Admins and teachers
+
+// Permission checking utility
+hasPermission(userRole, resource, action)
+canInviteUsers(userRole) // Returns true for admin
+```
+
+**Email Templates:**
+Located in `server/email/templates/invitation.ts`:
+- HTML email with branded design
+- Plain text fallback
+- Includes: organization name, inviter name, role, invitation link, expiration date
+- Security notice for unexpected invitations
+
+**Storage Layer:**
+All storage methods in `server/storage.ts`:
+```typescript
+createInvitation(invitation: InsertInvitation): Promise<Invitation>
+getInvitations(organizationId: string, status?: string): Promise<Invitation[]>
+getInvitationByToken(token: string): Promise<Invitation | undefined>
+updateInvitationStatus(id: string, status: string, timestamp?: Date): Promise<Invitation>
+deleteInvitation(id: string, organizationId: string): Promise<void>
+getUserRole(userId: string, organizationId: string): Promise<{ role: string } | undefined>
+removeUserFromOrganization(userId: string, organizationId: string): Promise<void>
+```
+
+**Frontend Implementation:**
+
+*Settings Page - Users Tab:*
+- View all organization users
+- "Add User" button opens InviteUserDialog
+- Remove user with confirmation dialog
+- Shows user name, email, role badge
+- Edit and delete actions per user
+
+*Settings Page - Invitations Tab:*
+- View all pending invitations
+- "Invite User" button opens InviteUserDialog
+- Shows invitation email, role, expiration countdown
+- Resend and delete actions per invitation
+- Expired badge for old invitations
+- Empty state with "Send First Invitation" button
+
+*InviteUserDialog Component:*
+- Email input (required, validated)
+- Role selector (Admin/Teacher/Staff)
+- Optional personal message (max 500 chars)
+- Character counter for message
+- Form validation with real-time feedback
+- 100% optimistic updates
+
+**Optimistic Updates:**
+All mutations implement full optimistic update pattern:
+- `createInvitation`: Instantly adds to list, closes dialog
+- `resendInvitation`: Shows success toast
+- `deleteInvitation`: Removes from list, closes confirmation
+- `removeUser`: Removes from users list, closes confirmation
+
+**Security:**
+- All admin endpoints protected with `requireRole(["admin"])`
+- `isAuthenticated` and `checkOrganizationAccess` on all routes
+- Zod schema validation on invitation creation
+- Unique tokens generated with `randomUUID()`
+- Invitation tokens expire after 7 days
+- Email uniqueness per organization (can't have duplicate pending invitations)
+- Cannot remove last admin from organization
+
+**Invitation Flow:**
+1. Admin clicks "Add User" → Opens InviteUserDialog
+2. Admin enters email, selects role, optional message → Clicks "Send Invitation"
+3. Backend creates invitation with unique token, 7-day expiration
+4. Email sent via Resend with invitation link
+5. Recipient clicks link → Validates token → Creates account → Accepts invitation
+6. User added to organization with specified role
+7. Invitation status updated to "accepted"
+
+**Error Handling:**
+- Duplicate pending invitation → 400 error (unique constraint)
+- Invalid token → 404 error
+- Expired invitation → Can be resent (generates new token)
+- Last admin removal → 400 error with helpful message
+- Email send failure → Logged but doesn't block invitation creation
+
 ### Recent Changes
+
+**November 18, 2025 - User Invitation System & RBAC:**
+- **NEW FEATURE**: Complete user invitation system with email delivery
+- Role-based access control (Admin, Teacher, Staff)
+- Secure token-based invitations valid for 7 days
+- Email templates (HTML + plain text) via Resend API
+- Settings page: New "Invitations" tab for managing pending invitations
+- Settings page: User management with remove functionality
+- InviteUserDialog component with optimistic updates
+- 7 new API endpoints for invitation management
+- RBAC middleware (`requireRole`) for route protection
+- Permission utility functions for role checking
+- Comprehensive documentation in CLAUDE.md
 
 **November 13, 2025 - Backend Refactoring & Test Infrastructure:**
 - **MAJOR**: Backend refactoring reducing boilerplate by 60-70%

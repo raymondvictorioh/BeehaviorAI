@@ -9,12 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Users, Bell, FileText, Plus, Trash2, Edit, GraduationCap, BookOpen, Award } from "lucide-react";
+import { Building2, Users, Bell, FileText, Plus, Trash2, Edit, GraduationCap, BookOpen, Award, Mail, RotateCcw } from "lucide-react";
 import { CategoryDialog } from "@/components/CategoryDialog";
 import { ClassDialog } from "@/components/ClassDialog";
 import { SubjectDialog } from "@/components/SubjectDialog";
 import { AcademicCategoryDialog } from "@/components/AcademicCategoryDialog";
-import type { BehaviorLogCategory, User, Class, Subject, AcademicLogCategory } from "@shared/schema";
+import { InviteUserDialog } from "@/components/settings/InviteUserDialog";
+import type { BehaviorLogCategory, User, Class, Subject, AcademicLogCategory, Invitation } from "@shared/schema";
 import { getColorClass } from "@/lib/utils/colorUtils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -43,6 +44,7 @@ interface OrganizationUser {
 type SettingsSection =
   | "organization"
   | "users"
+  | "invitations"
   | "classes"
   | "subjects"
   | "notifications"
@@ -67,10 +69,19 @@ export default function Settings() {
   const [isAcademicCategoryDialogOpen, setIsAcademicCategoryDialogOpen] = useState(false);
   const [editAcademicCategory, setEditAcademicCategory] = useState<AcademicLogCategory | null>(null);
   const [deleteAcademicCategoryId, setDeleteAcademicCategoryId] = useState<string | null>(null);
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [deleteInvitationId, setDeleteInvitationId] = useState<string | null>(null);
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
   // Fetch organization users
   const { data: organizationUsers = [], isLoading: isLoadingUsers } = useQuery<OrganizationUser[]>({
     queryKey: ["/api/organizations", orgId, "users"],
+    enabled: !!orgId,
+  });
+
+  // Fetch invitations
+  const { data: invitations = [], isLoading: isLoadingInvitations } = useQuery<Invitation[]>({
+    queryKey: ["/api/organizations", orgId, "invitations"],
     enabled: !!orgId,
   });
 
@@ -121,7 +132,7 @@ export default function Settings() {
   });
 
   // Combine all loading states
-  const isLoading = isLoadingUsers || isLoadingClasses || isLoadingCategories || isLoadingSubjects || isLoadingAcademicCategories;
+  const isLoading = isLoadingUsers || isLoadingInvitations || isLoadingClasses || isLoadingCategories || isLoadingSubjects || isLoadingAcademicCategories;
 
   // Update organization mutation
   const updateOrganization = useMutation({
@@ -855,10 +866,200 @@ export default function Settings() {
     }
   };
 
+  // Invitation mutations with optimistic updates
+  const createInvitation = useMutation({
+    mutationFn: async (data: { email: string; role: string; message?: string }) => {
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/invitations`, data);
+      return await res.json();
+    },
+    onMutate: async (newInvitation) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "invitations"] });
+      const previousInvitations = queryClient.getQueryData<Invitation[]>([
+        "/api/organizations",
+        orgId,
+        "invitations",
+      ]);
+      const tempId = `temp-${Date.now()}`;
+      const optimisticInvitation: Invitation = {
+        id: tempId,
+        organizationId: orgId!,
+        email: newInvitation.email,
+        role: newInvitation.role,
+        token: "temp-token",
+        status: "pending",
+        invitedBy: user?.id || null,
+        message: newInvitation.message || null,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        createdAt: new Date(),
+        acceptedAt: null,
+        declinedAt: null,
+        revokedAt: null,
+      };
+      if (previousInvitations) {
+        queryClient.setQueryData<Invitation[]>(
+          ["/api/organizations", orgId, "invitations"],
+          [...previousInvitations, optimisticInvitation]
+        );
+      }
+      setIsInviteDialogOpen(false);
+      return { previousInvitations, tempId };
+    },
+    onSuccess: (data: Invitation, _variables, context) => {
+      const previousInvitations = queryClient.getQueryData<Invitation[]>([
+        "/api/organizations",
+        orgId,
+        "invitations",
+      ]);
+      if (previousInvitations && context?.tempId) {
+        queryClient.setQueryData<Invitation[]>(
+          ["/api/organizations", orgId, "invitations"],
+          previousInvitations.map((inv) => (inv.id === context.tempId ? data : inv))
+        );
+      }
+      toast({
+        title: "Invitation sent",
+        description: "The user invitation has been sent successfully.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousInvitations) {
+        queryClient.setQueryData<Invitation[]>(
+          ["/api/organizations", orgId, "invitations"],
+          context.previousInvitations
+        );
+      }
+      setIsInviteDialogOpen(true);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send invitation. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "invitations"] });
+    },
+  });
+
+  const resendInvitation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/organizations/${orgId}/invitations/${id}/resend`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Invitation resent",
+        description: "The invitation email has been resent successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to resend invitation. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteInvitation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/organizations/${orgId}/invitations/${id}`);
+      return id;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "invitations"] });
+      const previousInvitations = queryClient.getQueryData<Invitation[]>([
+        "/api/organizations",
+        orgId,
+        "invitations",
+      ]);
+      if (previousInvitations) {
+        queryClient.setQueryData<Invitation[]>(
+          ["/api/organizations", orgId, "invitations"],
+          previousInvitations.filter((inv) => inv.id !== id)
+        );
+      }
+      setDeleteInvitationId(null);
+      return { previousInvitations };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Invitation deleted",
+        description: "The invitation has been successfully deleted.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousInvitations) {
+        queryClient.setQueryData<Invitation[]>(
+          ["/api/organizations", orgId, "invitations"],
+          context.previousInvitations
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete invitation. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "invitations"] });
+    },
+  });
+
+  const handleInviteSubmit = async (data: { email: string; role: string; message?: string }) => {
+    createInvitation.mutate(data);
+  };
+
+  // Remove user mutation with optimistic updates
+  const removeUser = useMutation({
+    mutationFn: async (userId: string) => {
+      await apiRequest("DELETE", `/api/organizations/${orgId}/users/${userId}`);
+      return userId;
+    },
+    onMutate: async (userId: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/organizations", orgId, "users"] });
+      const previousUsers = queryClient.getQueryData<OrganizationUser[]>([
+        "/api/organizations",
+        orgId,
+        "users",
+      ]);
+      if (previousUsers) {
+        queryClient.setQueryData<OrganizationUser[]>(
+          ["/api/organizations", orgId, "users"],
+          previousUsers.filter((u) => u.userId !== userId)
+        );
+      }
+      setDeleteUserId(null);
+      return { previousUsers };
+    },
+    onSuccess: () => {
+      toast({
+        title: "User removed",
+        description: "The user has been successfully removed from the organization.",
+      });
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousUsers) {
+        queryClient.setQueryData<OrganizationUser[]>(
+          ["/api/organizations", orgId, "users"],
+          context.previousUsers
+        );
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove user. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations", orgId, "users"] });
+    },
+  });
+
   // Navigation items
   const navigationItems = [
     { id: "organization" as const, label: "Organization", icon: Building2 },
     { id: "users" as const, label: "Users", icon: Users },
+    { id: "invitations" as const, label: "Invitations", icon: Mail },
     { id: "classes" as const, label: "Classes", icon: GraduationCap },
     { id: "subjects" as const, label: "Subjects", icon: BookOpen },
     { id: "notifications" as const, label: "Notifications", icon: Bell },
@@ -871,7 +1072,7 @@ export default function Settings() {
     <div className="flex h-full">
       {/* Sidebar Skeleton */}
       <div className="w-64 border-r bg-card p-6 space-y-2">
-        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
           <div key={i} className="h-10 bg-muted animate-pulse rounded" />
         ))}
       </div>
@@ -1030,7 +1231,7 @@ export default function Settings() {
                         Manage admin users and teachers who can access the system
                       </CardDescription>
                     </div>
-                    <Button data-testid="button-add-user">
+                    <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-add-user">
                       <Plus className="h-4 w-4 mr-2" />
                       Add User
                     </Button>
@@ -1041,7 +1242,7 @@ export default function Settings() {
                     <div className="text-center py-12">
                       <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                       <p className="text-muted-foreground mb-4">No users found in this organization.</p>
-                      <Button data-testid="button-add-first-user">
+                      <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-add-first-user">
                         <Plus className="h-4 w-4 mr-2" />
                         Add First User
                       </Button>
@@ -1099,6 +1300,7 @@ export default function Settings() {
                                 variant="ghost"
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
+                                onClick={() => setDeleteUserId(orgUser.userId)}
                                 data-testid={`button-delete-user-${orgUser.userId}`}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -1107,6 +1309,113 @@ export default function Settings() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {activeSection === "invitations" && (
+              <Card data-testid="card-invitations">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Pending Invitations</CardTitle>
+                      <CardDescription>
+                        Manage pending user invitations for your organization
+                      </CardDescription>
+                    </div>
+                    <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-invite-user">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Invite User
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {invitations.filter((inv) => inv.status === "pending").length === 0 ? (
+                    <div className="text-center py-12">
+                      <Mail className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground mb-4">No pending invitations.</p>
+                      <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-send-first-invitation">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Send First Invitation
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {invitations
+                        .filter((inv) => inv.status === "pending")
+                        .map((invitation) => {
+                          const roleLabel =
+                            invitation.role === "admin"
+                              ? "Administrator"
+                              : invitation.role === "teacher"
+                              ? "Teacher"
+                              : "Staff";
+                          const roleVariant =
+                            invitation.role === "admin"
+                              ? "secondary"
+                              : invitation.role === "teacher"
+                              ? "outline"
+                              : "outline";
+                          const expiresAt = new Date(invitation.expiresAt);
+                          const isExpired = expiresAt < new Date();
+                          const daysUntilExpiry = Math.ceil(
+                            (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                          );
+
+                          return (
+                            <div
+                              key={invitation.id}
+                              className="border rounded-lg p-4 flex items-center justify-between"
+                              data-testid={`invitation-item-${invitation.id}`}
+                            >
+                              <div className="flex items-center gap-3 flex-1">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarFallback className="text-sm">
+                                    {invitation.email[0]?.toUpperCase() || "?"}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-medium">{invitation.email}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Badge variant={roleVariant}>{roleLabel}</Badge>
+                                    {isExpired ? (
+                                      <Badge variant="destructive" className="text-xs">
+                                        Expired
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        Expires in {daysUntilExpiry} {daysUntilExpiry === 1 ? "day" : "days"}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => resendInvitation.mutate(invitation.id)}
+                                  disabled={resendInvitation.isPending || isExpired}
+                                  data-testid={`button-resend-invitation-${invitation.id}`}
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-1" />
+                                  Resend
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => setDeleteInvitationId(invitation.id)}
+                                  data-testid={`button-delete-invitation-${invitation.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
                   )}
                 </CardContent>
@@ -1615,6 +1924,55 @@ export default function Settings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={!!deleteInvitationId} onOpenChange={(open) => !open && setDeleteInvitationId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Invitation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this invitation? The user will no longer be able to accept it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteInvitationId && deleteInvitation.mutate(deleteInvitationId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={!!deleteUserId} onOpenChange={(open) => !open && setDeleteUserId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this user from the organization? This action cannot be undone.
+              {deleteUserId && organizationUsers.find((u) => u.userId === deleteUserId)?.role === "admin" && (
+                <span className="block mt-2 text-amber-600 font-medium">
+                  Warning: You are about to remove an administrator. Make sure there is at least one other admin in the organization.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteUserId && removeUser.mutate(deleteUserId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <InviteUserDialog
+        open={isInviteDialogOpen}
+        onOpenChange={setIsInviteDialogOpen}
+        onSubmit={handleInviteSubmit}
+        isPending={createInvitation.isPending}
+      />
     </BeeLoader>
   );
 }

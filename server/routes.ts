@@ -1,10 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { randomUUID } from "crypto";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, checkOrganizationAccess, supabase } from "./supabaseAuth";
 import { getChatCompletion, transcribeAudio, generateMeetingSummary } from "./openai";
 import { asyncHandler } from "./middleware/asyncHandler";
 import { validate } from "./middleware/validate";
+import { requireRole } from "./middleware/checkRole";
+import { sendInvitationEmail } from "./email/sendInvitationEmail";
 import {
   insertTaskSchema,
   insertStudentResourceSchema,
@@ -14,6 +17,7 @@ import {
   insertListSchema,
   insertListItemSchema,
   insertListShareSchema,
+  insertInvitationSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -331,6 +335,294 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch dashboard stats" });
     }
   });
+
+  // Invitation routes
+  app.post(
+    "/api/organizations/:orgId/invitations",
+    isAuthenticated,
+    checkOrganizationAccess,
+    requireRole(["admin"]),
+    async (req: any, res) => {
+      try {
+        const { orgId } = req.params;
+        const userId = getUserId(req);
+
+        // Inject organization ID and invited by user ID
+        const invitationData = {
+          ...req.body,
+          organizationId: orgId,
+          invitedBy: userId,
+        };
+
+        // Validate with schema
+        const validatedData = insertInvitationSchema.parse(invitationData);
+
+        // Generate secure token and set expiration
+        const token = randomUUID();
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+        // Create invitation
+        const invitation = await storage.createInvitation({
+          ...validatedData,
+          token,
+          expiresAt,
+          status: "pending",
+        });
+
+        // Fetch organization and inviter details for email
+        const organization = await storage.getOrganization(orgId);
+        const inviter = await storage.getUser(userId);
+
+        // Send invitation email (async, don't block)
+        if (organization) {
+          sendInvitationEmail(invitation, organization, inviter || null).catch((error) => {
+            console.error("Failed to send invitation email:", error);
+          });
+        }
+
+        res.json(invitation);
+      } catch (error: any) {
+        console.error("Error creating invitation:", error);
+
+        if (error.name === "ZodError") {
+          return res.status(400).json({ message: "Validation error", errors: error.errors });
+        }
+
+        if (error.code === "23503") {
+          return res.status(400).json({ message: "Invalid organization ID" });
+        }
+
+        if (error.code === "23505") {
+          return res.status(400).json({ message: "A pending invitation for this email already exists" });
+        }
+
+        res.status(500).json({ message: "Failed to create invitation" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/organizations/:orgId/invitations",
+    isAuthenticated,
+    checkOrganizationAccess,
+    requireRole(["admin"]),
+    async (req: any, res) => {
+      try {
+        const { orgId } = req.params;
+        const { status } = req.query;
+
+        const invitations = await storage.getInvitations(orgId, status as string | undefined);
+        res.json(invitations);
+      } catch (error) {
+        console.error("Error fetching invitations:", error);
+        res.status(500).json({ message: "Failed to fetch invitations" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/organizations/:orgId/invitations/:id/resend",
+    isAuthenticated,
+    checkOrganizationAccess,
+    requireRole(["admin"]),
+    async (req: any, res) => {
+      try {
+        const { orgId, id } = req.params;
+
+        // Get existing invitation
+        const existingInvitations = await storage.getInvitations(orgId);
+        const invitation = existingInvitations.find((inv) => inv.id === id);
+
+        if (!invitation) {
+          return res.status(404).json({ message: "Invitation not found" });
+        }
+
+        if (invitation.status !== "pending" && invitation.status !== "expired") {
+          return res.status(400).json({ message: "Can only resend pending or expired invitations" });
+        }
+
+        // Generate new token and extend expiration
+        const token = randomUUID();
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+        // Delete old invitation and create new one
+        await storage.deleteInvitation(id, orgId);
+        const updatedInvitation = await storage.createInvitation({
+          organizationId: orgId,
+          email: invitation.email,
+          role: invitation.role as "admin" | "teacher" | "staff",
+          token,
+          expiresAt,
+          status: "pending",
+          invitedBy: invitation.invitedBy || undefined,
+          message: invitation.message || undefined,
+        });
+
+        // Fetch organization and inviter for email
+        const organization = await storage.getOrganization(orgId);
+        const inviter = invitation.invitedBy ? await storage.getUser(invitation.invitedBy) : null;
+
+        // Resend invitation email
+        if (organization) {
+          sendInvitationEmail(updatedInvitation, organization, inviter || null).catch((error) => {
+            console.error("Failed to resend invitation email:", error);
+          });
+        }
+
+        res.json(updatedInvitation);
+      } catch (error) {
+        console.error("Error resending invitation:", error);
+        res.status(500).json({ message: "Failed to resend invitation" });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/organizations/:orgId/invitations/:id",
+    isAuthenticated,
+    checkOrganizationAccess,
+    requireRole(["admin"]),
+    async (req: any, res) => {
+      try {
+        const { orgId, id } = req.params;
+        await storage.deleteInvitation(id, orgId);
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error deleting invitation:", error);
+        res.status(500).json({ message: "Failed to delete invitation" });
+      }
+    }
+  );
+
+  // Invitation acceptance routes (public)
+  app.get("/api/invitations/validate/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+
+      const invitation = await storage.getInvitationByToken(token);
+
+      if (!invitation) {
+        return res.status(404).json({ valid: false, message: "Invitation not found" });
+      }
+
+      if (invitation.status !== "pending") {
+        return res.status(410).json({ valid: false, message: "Invitation already used or revoked" });
+      }
+
+      if (new Date() > new Date(invitation.expiresAt)) {
+        // Mark as expired
+        await storage.updateInvitationStatus(invitation.id, "expired");
+        return res.status(410).json({ valid: false, message: "Invitation expired" });
+      }
+
+      // Fetch organization details
+      const organization = await storage.getOrganization(invitation.organizationId);
+      const inviter = invitation.invitedBy ? await storage.getUser(invitation.invitedBy) : null;
+
+      res.json({
+        valid: true,
+        email: invitation.email,
+        organizationName: organization?.name || "Unknown",
+        role: invitation.role,
+        inviterName: inviter
+          ? `${inviter.firstName || ""} ${inviter.lastName || ""}`.trim() || inviter.email
+          : "An administrator",
+        expiresAt: invitation.expiresAt,
+      });
+    } catch (error) {
+      console.error("Error validating invitation:", error);
+      res.status(500).json({ valid: false, message: "Failed to validate invitation" });
+    }
+  });
+
+  app.post("/api/invitations/:token/accept", isAuthenticated, async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      const userId = getUserId(req);
+
+      const invitation = await storage.getInvitationByToken(token);
+
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found" });
+      }
+
+      if (invitation.status !== "pending") {
+        return res.status(400).json({ message: "Invitation already used or revoked" });
+      }
+
+      if (new Date() > new Date(invitation.expiresAt)) {
+        await storage.updateInvitationStatus(invitation.id, "expired");
+        return res.status(410).json({ message: "Invitation expired" });
+      }
+
+      // Verify user email matches invitation email
+      const user = await storage.getUser(userId);
+      if (user?.email !== invitation.email) {
+        return res.status(403).json({
+          message: "This invitation was sent to a different email address",
+        });
+      }
+
+      // Check if user is already in organization
+      const userOrgs = await storage.getUserOrganizations(userId);
+      const alreadyMember = userOrgs.some((org) => org.id === invitation.organizationId);
+
+      if (alreadyMember) {
+        return res.status(400).json({ message: "You are already a member of this organization" });
+      }
+
+      // Add user to organization
+      await storage.addUserToOrganization({
+        userId,
+        organizationId: invitation.organizationId,
+        role: invitation.role,
+      });
+
+      // Mark invitation as accepted
+      await storage.updateInvitationStatus(invitation.id, "accepted", new Date());
+
+      res.json({ success: true, organizationId: invitation.organizationId });
+    } catch (error) {
+      console.error("Error accepting invitation:", error);
+      res.status(500).json({ message: "Failed to accept invitation" });
+    }
+  });
+
+  // User management routes
+  app.delete(
+    "/api/organizations/:orgId/users/:userId",
+    isAuthenticated,
+    checkOrganizationAccess,
+    requireRole(["admin"]),
+    async (req: any, res) => {
+      try {
+        const { orgId, userId } = req.params;
+
+        // Prevent removing the last admin
+        const orgUsers = await storage.getOrganizationUsers(orgId);
+        const userToRemove = orgUsers.find((u) => u.userId === userId);
+
+        if (!userToRemove) {
+          return res.status(404).json({ message: "User not found in organization" });
+        }
+
+        if (userToRemove.role === "admin") {
+          const adminCount = orgUsers.filter((u) => u.role === "admin").length;
+          if (adminCount <= 1) {
+            return res.status(400).json({
+              message: "Cannot remove the last admin. Assign another admin first.",
+            });
+          }
+        }
+
+        await storage.removeUserFromOrganization(userId, orgId);
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error removing user:", error);
+        res.status(500).json({ message: "Failed to remove user from organization" });
+      }
+    }
+  );
 
   // Student routes
   app.get("/api/organizations/:orgId/students", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {

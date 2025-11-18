@@ -396,3 +396,50 @@ export const insertListShareSchema = createInsertSchema(listShares).omit({
 
 export type InsertListShare = z.infer<typeof insertListShareSchema>;
 export type ListShare = typeof listShares.$inferSelect;
+
+// Invitations table - Tracks pending invitations to join organizations
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    organizationId: varchar("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 255 }).notNull(),
+    role: varchar("role", { length: 50 }).notNull(), // "admin", "teacher", "staff"
+    token: varchar("token", { length: 255 }).notNull().unique(),
+    status: varchar("status", { length: 50 }).notNull().default("pending"), // pending, accepted, declined, revoked, expired
+    invitedBy: varchar("invited_by").references(() => users.id),
+    message: text("message"), // Optional personal message
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    acceptedAt: timestamp("accepted_at"),
+    declinedAt: timestamp("declined_at"),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (table) => [
+    // Prevent duplicate pending invitations
+    uniqueIndex("unique_pending_invitation")
+      .on(table.organizationId, table.email)
+      .where(sql`status = 'pending'`),
+  ]
+);
+
+export const insertInvitationSchema = createInsertSchema(invitations, {
+  email: z.string().email("Invalid email address").max(255),
+  role: z.enum(["admin", "teacher", "staff"], {
+    errorMap: () => ({ message: "Role must be admin, teacher, or staff" }),
+  }),
+  message: z.string().max(500).optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  acceptedAt: true,
+  declinedAt: true,
+  revokedAt: true,
+});
+
+export const updateInvitationSchema = insertInvitationSchema.partial();
+
+export type Invitation = typeof invitations.$inferSelect;
+export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
