@@ -32,13 +32,13 @@ export function InviteUserDialog({
   isPending = false,
 }: InviteUserDialogProps) {
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("teacher");
+  const [role, setRole] = useState("");
 
   // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
       setEmail("");
-      setRole("teacher");
+      setRole("");
     }
   }, [open]);
 
