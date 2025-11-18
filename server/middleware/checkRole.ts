@@ -1,9 +1,13 @@
 import { RequestHandler } from "express";
 import { storage } from "../storage";
+import { ROLE_HIERARCHY } from "../utils/permissions";
 
 /**
  * Middleware to check if the authenticated user has one of the required roles
  * for the current organization.
+ *
+ * Uses role hierarchy: owner > admin > teacher > staff
+ * Higher roles automatically pass checks for lower roles.
  *
  * Must be used after isAuthenticated and checkOrganizationAccess middleware.
  *
@@ -15,7 +19,7 @@ import { storage } from "../storage";
  *   "/api/organizations/:orgId/invitations",
  *   isAuthenticated,
  *   checkOrganizationAccess,
- *   requireRole(["admin"]), // Only admins can invite users
+ *   requireRole(["admin"]), // Allows both "owner" and "admin"
  *   async (req, res) => { ... }
  * );
  */
@@ -46,10 +50,17 @@ export function requireRole(allowedRoles: string[]): RequestHandler {
         });
       }
 
-      // Check if user's role is in the allowed roles list
-      if (!allowedRoles.includes(userRole.role)) {
+      // Check if user's role is allowed using hierarchy
+      // Higher roles (e.g., owner level 4) can access routes requiring lower roles (e.g., admin level 3)
+      const userRoleLevel = ROLE_HIERARCHY[userRole.role as keyof typeof ROLE_HIERARCHY] || 0;
+      const isAllowed = allowedRoles.some(allowedRole => {
+        const allowedLevel = ROLE_HIERARCHY[allowedRole as keyof typeof ROLE_HIERARCHY] || 0;
+        return userRoleLevel >= allowedLevel;
+      });
+
+      if (!isAllowed) {
         return res.status(403).json({
-          message: `Insufficient permissions. Required role: ${allowedRoles.join(" or ")}`,
+          message: `Insufficient permissions. Required role: ${allowedRoles.join(" or ")} or higher`,
         });
       }
 

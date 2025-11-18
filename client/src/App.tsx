@@ -29,6 +29,7 @@ const Signup = lazy(() => import("@/pages/Signup"));
 const ConfirmEmail = lazy(() => import("@/pages/ConfirmEmail"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
+const AcceptInvitation = lazy(() => import("@/pages/AcceptInvitation"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Students = lazy(() => import("@/pages/Students"));
@@ -181,6 +182,7 @@ function AppContent() {
           <Route path="/confirm-email" component={ConfirmEmail} />
           <Route path="/forgot-password" component={ForgotPassword} />
           <Route path="/reset-password" component={ResetPassword} />
+          <Route path="/accept-invitation/:token" component={AcceptInvitation} />
           <Route path="/" component={Landing} />
           <Route component={Landing} />
         </Switch>

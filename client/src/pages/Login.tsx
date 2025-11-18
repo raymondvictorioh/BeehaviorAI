@@ -20,8 +20,12 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const [, navigate] = useLocation();
-  const { toast } = useToast();
+  const { toast} = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check for invitation parameter
+  const searchParams = new URLSearchParams(window.location.search);
+  const invitationToken = searchParams.get("invitation");
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -44,6 +48,17 @@ export default function Login() {
       // Invalidate user query to refresh authentication state
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
 
+      // If logging in with invitation, redirect to accept invitation page
+      if (invitationToken) {
+        toast({
+          title: "Welcome back!",
+          description: "Accepting your invitation...",
+        });
+        navigate(`/accept-invitation/${invitationToken}?auto=true`);
+        return;
+      }
+
+      // Regular login flow
       toast({
         title: "Welcome back!",
         description: "You have successfully logged in.",

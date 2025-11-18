@@ -347,27 +347,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { orgId } = req.params;
         const userId = getUserId(req);
 
-        // Inject organization ID and invited by user ID
+        // Generate secure token and set expiration
+        const token = randomUUID();
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+        // Inject organization ID, invited by user ID, token, and expiration
         const invitationData = {
           ...req.body,
           organizationId: orgId,
           invitedBy: userId,
+          token,
+          expiresAt,
+          status: "pending",
         };
 
         // Validate with schema
         const validatedData = insertInvitationSchema.parse(invitationData);
 
-        // Generate secure token and set expiration
-        const token = randomUUID();
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
         // Create invitation
-        const invitation = await storage.createInvitation({
-          ...validatedData,
-          token,
-          expiresAt,
-          status: "pending",
-        });
+        const invitation = await storage.createInvitation(validatedData);
 
         // Fetch organization and inviter details for email
         const organization = await storage.getOrganization(orgId);
@@ -598,7 +596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { orgId, userId } = req.params;
 
-        // Prevent removing the last admin
+        // Get all organization users
         const orgUsers = await storage.getOrganizationUsers(orgId);
         const userToRemove = orgUsers.find((u) => u.userId === userId);
 
@@ -606,6 +604,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ message: "User not found in organization" });
         }
 
+        // Prevent removing owner (owner role is protected)
+        if (userToRemove.role === "owner") {
+          return res.status(400).json({
+            message: "Cannot remove owner from organization. Ownership must be transferred first.",
+          });
+        }
+
+        // Prevent removing the last admin
         if (userToRemove.role === "admin") {
           const adminCount = orgUsers.filter((u) => u.role === "admin").length;
           if (adminCount <= 1) {

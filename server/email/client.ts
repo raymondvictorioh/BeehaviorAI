@@ -21,7 +21,7 @@ export const resend = new Resend(RESEND_API_KEY);
  * Email sender configuration
  * Update this with your verified domain
  */
-export const FROM_EMAIL = "BeehaviorAI <noreply@beehaviorai.com>";
+export const FROM_EMAIL = "BeehaviorAI <noreply@hello.relyant.app>";
 
 /**
  * Base URL for the application
