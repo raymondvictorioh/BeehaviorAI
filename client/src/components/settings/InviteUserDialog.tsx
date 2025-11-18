@@ -10,7 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -34,14 +33,12 @@ export function InviteUserDialog({
 }: InviteUserDialogProps) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("teacher");
-  const [message, setMessage] = useState("");
 
   // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
       setEmail("");
       setRole("teacher");
-      setMessage("");
     }
   }, [open]);
 
@@ -50,7 +47,6 @@ export function InviteUserDialog({
     await onSubmit({
       email,
       role,
-      message: message.trim() || undefined,
     });
   };
 
@@ -98,22 +94,6 @@ export function InviteUserDialog({
                 <span className="font-medium">Admin:</span> Full access to all features. {" "}
                 <span className="font-medium">Teacher:</span> Can manage students and create logs. {" "}
                 <span className="font-medium">Staff:</span> Read-only access.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="message">Personal Message (Optional)</Label>
-              <Textarea
-                id="message"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Add a personal message to the invitation email..."
-                rows={3}
-                maxLength={500}
-                data-testid="textarea-invite-message"
-              />
-              <p className="text-xs text-muted-foreground">
-                {message.length}/500 characters
               </p>
             </div>
           </div>

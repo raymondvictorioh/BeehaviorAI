@@ -65,9 +65,15 @@ export function getInvitationEmailHTML(data: InvitationEmailData): string {
               <table cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
                   <td align="center" style="padding: 0 0 32px;">
-                    <a href="${invitationLink}" style="display: inline-block; padding: 14px 32px; background-color: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">
-                      Accept Invitation
-                    </a>
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" style="background-color: #3b82f6; border-radius: 6px;">
+                          <a href="${invitationLink}" target="_blank" style="display: block; padding: 14px 32px; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                            Accept Invitation
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>

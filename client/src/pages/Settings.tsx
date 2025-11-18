@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, Users, Bell, FileText, Plus, Trash2, Edit, GraduationCap, BookOpen, Award, Mail, RotateCcw } from "lucide-react";
 import { CategoryDialog } from "@/components/CategoryDialog";
 import { ClassDialog } from "@/components/ClassDialog";
@@ -44,7 +45,6 @@ interface OrganizationUser {
 type SettingsSection =
   | "organization"
   | "users"
-  | "invitations"
   | "classes"
   | "subjects"
   | "notifications"
@@ -1059,7 +1059,6 @@ export default function Settings() {
   const navigationItems = [
     { id: "organization" as const, label: "Organization", icon: Building2 },
     { id: "users" as const, label: "Users", icon: Users },
-    { id: "invitations" as const, label: "Invitations", icon: Mail },
     { id: "classes" as const, label: "Classes", icon: GraduationCap },
     { id: "subjects" as const, label: "Subjects", icon: BookOpen },
     { id: "notifications" as const, label: "Notifications", icon: Bell },
@@ -1228,101 +1227,7 @@ export default function Settings() {
                     <div>
                       <CardTitle>User Management</CardTitle>
                       <CardDescription>
-                        Manage admin users and teachers who can access the system
-                      </CardDescription>
-                    </div>
-                    <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-add-user">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add User
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {organizationUsers.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground mb-4">No users found in this organization.</p>
-                      <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-add-first-user">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add First User
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {organizationUsers.map((orgUser) => {
-                        const user = orgUser.user;
-                        const displayName = user.firstName && user.lastName
-                          ? `${user.firstName} ${user.lastName}`
-                          : user.email || "Unknown User";
-                        const initials = user.firstName && user.lastName
-                          ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-                          : user.email?.[0]?.toUpperCase() || "U";
-                        const roleLabel = orgUser.role === "owner"
-                          ? "Owner"
-                          : orgUser.role === "admin"
-                          ? "Administrator"
-                          : "Teacher";
-                        const roleVariant = orgUser.role === "owner"
-                          ? "default"
-                          : orgUser.role === "admin"
-                          ? "secondary"
-                          : "outline";
-
-                        return (
-                          <div
-                            key={orgUser.id}
-                            className="border rounded-lg p-4 flex items-center justify-between"
-                            data-testid={`user-item-${orgUser.userId}`}
-                          >
-                            <div className="flex items-center gap-3 flex-1">
-                              <Avatar className="h-10 w-10">
-                                <AvatarFallback className="text-sm">
-                                  {initials}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium">{displayName}</p>
-                                <p className="text-sm text-muted-foreground">{user.email}</p>
-                                <Badge variant={roleVariant} className="mt-1">
-                                  {roleLabel}
-                                </Badge>
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                data-testid={`button-edit-user-${orgUser.userId}`}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => setDeleteUserId(orgUser.userId)}
-                                data-testid={`button-delete-user-${orgUser.userId}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {activeSection === "invitations" && (
-              <Card data-testid="card-invitations">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>Pending Invitations</CardTitle>
-                      <CardDescription>
-                        Manage pending user invitations for your organization
+                        Manage users and pending invitations
                       </CardDescription>
                     </div>
                     <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-invite-user">
@@ -1332,92 +1237,181 @@ export default function Settings() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {invitations.filter((inv) => inv.status === "pending").length === 0 ? (
-                    <div className="text-center py-12">
-                      <Mail className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground mb-4">No pending invitations.</p>
-                      <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-send-first-invitation">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Send First Invitation
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {invitations
-                        .filter((inv) => inv.status === "pending")
-                        .map((invitation) => {
-                          const roleLabel =
-                            invitation.role === "admin"
-                              ? "Administrator"
-                              : invitation.role === "teacher"
-                              ? "Teacher"
-                              : "Staff";
-                          const roleVariant =
-                            invitation.role === "admin"
-                              ? "secondary"
-                              : invitation.role === "teacher"
-                              ? "outline"
-                              : "outline";
-                          const expiresAt = new Date(invitation.expiresAt);
-                          const isExpired = expiresAt < new Date();
-                          const daysUntilExpiry = Math.ceil(
-                            (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-                          );
+                  <Tabs defaultValue="active" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="active" data-testid="tab-active-users">Active Users</TabsTrigger>
+                      <TabsTrigger value="pending" data-testid="tab-pending-invitations">Pending Invitations</TabsTrigger>
+                    </TabsList>
 
-                          return (
-                            <div
-                              key={invitation.id}
-                              className="border rounded-lg p-4 flex items-center justify-between"
-                              data-testid={`invitation-item-${invitation.id}`}
-                            >
-                              <div className="flex items-center gap-3 flex-1">
-                                <Avatar className="h-10 w-10">
-                                  <AvatarFallback className="text-sm">
-                                    {invitation.email[0]?.toUpperCase() || "?"}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="font-medium">{invitation.email}</p>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <Badge variant={roleVariant}>{roleLabel}</Badge>
-                                    {isExpired ? (
-                                      <Badge variant="destructive" className="text-xs">
-                                        Expired
-                                      </Badge>
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground">
-                                        Expires in {daysUntilExpiry} {daysUntilExpiry === 1 ? "day" : "days"}
-                                      </span>
-                                    )}
+                    <TabsContent value="active" className="mt-6">
+                      {organizationUsers.length === 0 ? (
+                        <div className="text-center py-12">
+                          <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                          <p className="text-muted-foreground mb-4">No users found in this organization.</p>
+                          <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-add-first-user">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Invite First User
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {organizationUsers.map((orgUser) => {
+                            const user = orgUser.user;
+                            const displayName = user.firstName && user.lastName
+                              ? `${user.firstName} ${user.lastName}`
+                              : user.email || "Unknown User";
+                            const initials = user.firstName && user.lastName
+                              ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+                              : user.email?.[0]?.toUpperCase() || "U";
+                            const roleLabel = orgUser.role === "owner"
+                              ? "Owner"
+                              : orgUser.role === "admin"
+                              ? "Administrator"
+                              : orgUser.role === "staff"
+                              ? "Staff"
+                              : "Teacher";
+                            const roleVariant = orgUser.role === "owner"
+                              ? "default"
+                              : orgUser.role === "admin"
+                              ? "secondary"
+                              : "outline";
+
+                            return (
+                              <div
+                                key={orgUser.id}
+                                className="border rounded-lg p-4 flex items-center justify-between"
+                                data-testid={`user-item-${orgUser.userId}`}
+                              >
+                                <div className="flex items-center gap-3 flex-1">
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarFallback className="text-sm">
+                                      {initials}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <p className="font-medium">{displayName}</p>
+                                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                                    <Badge variant={roleVariant} className="mt-1">
+                                      {roleLabel}
+                                    </Badge>
                                   </div>
                                 </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    data-testid={`button-edit-user-${orgUser.userId}`}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  {orgUser.role !== "owner" && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive hover:text-destructive"
+                                      onClick={() => setDeleteUserId(orgUser.userId)}
+                                      data-testid={`button-delete-user-${orgUser.userId}`}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => resendInvitation.mutate(invitation.id)}
-                                  disabled={resendInvitation.isPending || isExpired}
-                                  data-testid={`button-resend-invitation-${invitation.id}`}
+                            );
+                          })}
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="pending" className="mt-6">
+                      {invitations.filter((inv) => inv.status === "pending").length === 0 ? (
+                        <div className="text-center py-12">
+                          <Mail className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                          <p className="text-muted-foreground mb-4">No pending invitations.</p>
+                          <Button onClick={() => setIsInviteDialogOpen(true)} data-testid="button-send-first-invitation">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Send First Invitation
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {invitations
+                            .filter((inv) => inv.status === "pending")
+                            .map((invitation) => {
+                              const roleLabel =
+                                invitation.role === "admin"
+                                  ? "Administrator"
+                                  : invitation.role === "teacher"
+                                  ? "Teacher"
+                                  : "Staff";
+                              const roleVariant =
+                                invitation.role === "admin"
+                                  ? "secondary"
+                                  : invitation.role === "teacher"
+                                  ? "outline"
+                                  : "outline";
+                              const expiresAt = new Date(invitation.expiresAt);
+                              const isExpired = expiresAt < new Date();
+                              const daysUntilExpiry = Math.ceil(
+                                (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                              );
+
+                              return (
+                                <div
+                                  key={invitation.id}
+                                  className="border rounded-lg p-4 flex items-center justify-between"
+                                  data-testid={`invitation-item-${invitation.id}`}
                                 >
-                                  <RotateCcw className="h-4 w-4 mr-1" />
-                                  Resend
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => setDeleteInvitationId(invitation.id)}
-                                  data-testid={`button-delete-invitation-${invitation.id}`}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <Avatar className="h-10 w-10">
+                                      <AvatarFallback className="text-sm">
+                                        {invitation.email[0]?.toUpperCase() || "?"}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                      <p className="font-medium">{invitation.email}</p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <Badge variant={roleVariant}>{roleLabel}</Badge>
+                                        {isExpired ? (
+                                          <Badge variant="destructive" className="text-xs">
+                                            Expired
+                                          </Badge>
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground">
+                                            Expires in {daysUntilExpiry} {daysUntilExpiry === 1 ? "day" : "days"}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => resendInvitation.mutate(invitation.id)}
+                                      disabled={resendInvitation.isPending || isExpired}
+                                      data-testid={`button-resend-invitation-${invitation.id}`}
+                                    >
+                                      <RotateCcw className="h-4 w-4 mr-1" />
+                                      Resend
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive hover:text-destructive"
+                                      onClick={() => setDeleteInvitationId(invitation.id)}
+                                      data-testid={`button-delete-invitation-${invitation.id}`}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
                 </CardContent>
               </Card>
             )}

@@ -4,7 +4,11 @@
  * Defines what actions each role can perform on different resource types.
  * Used for both backend authorization and frontend UI visibility.
  *
- * Roles: admin, teacher, staff
+ * Roles (hierarchical): owner > admin > teacher > staff
+ * - owner: Organization creator, full access + ownership privileges
+ * - admin: Management permissions, can invite users
+ * - teacher: Can manage students and create logs/meetings/tasks
+ * - staff: Read-only access to most resources
  *
  * Permission levels:
  * - all: Full access to everything
@@ -16,7 +20,7 @@
  * - none: No access
  */
 
-export type Role = "admin" | "teacher" | "staff";
+export type Role = "owner" | "admin" | "teacher" | "staff";
 export type Action = "create" | "edit" | "delete" | "view_all" | "view_assigned";
 export type ResourceType =
   | "students"
@@ -35,6 +39,21 @@ export type ResourceType =
  * Permission matrix defining what each role can do
  */
 export const PERMISSIONS: Record<Role, Record<ResourceType, Record<Action, boolean>>> = {
+  owner: {
+    // Owners have full access to everything (same as admin) + ownership privileges
+    students: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    behavior_logs: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    academic_logs: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    meetings: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    tasks: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    categories: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    classes: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    subjects: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    users: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    invitations: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+    organization_settings: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
+  },
+
   admin: {
     // Admins have full access to everything
     students: { create: true, edit: true, delete: true, view_all: true, view_assigned: true },
@@ -80,6 +99,22 @@ export const PERMISSIONS: Record<Role, Record<ResourceType, Record<Action, boole
     organization_settings: { create: false, edit: false, delete: false, view_all: false, view_assigned: false },
   },
 };
+
+/**
+ * Role hierarchy levels (higher number = more permissions)
+ * Used by requireRole middleware to automatically allow higher roles
+ * when a lower role is required.
+ *
+ * @example
+ * requireRole(["admin"]) will allow both "owner" (level 4) and "admin" (level 3)
+ * requireRole(["teacher"]) will allow "owner", "admin", and "teacher"
+ */
+export const ROLE_HIERARCHY: Record<Role, number> = {
+  owner: 4,
+  admin: 3,
+  teacher: 2,
+  staff: 1,
+} as const;
 
 /**
  * Check if a role has permission to perform an action on a resource type
@@ -156,13 +191,13 @@ export function getRolePermissions(role: Role): Record<ResourceType, Record<Acti
 }
 
 /**
- * Check if a role is considered an admin-level role
+ * Check if a role is considered an admin-level role (owner or admin)
  *
  * @param role - User's role
- * @returns boolean - true if role is admin
+ * @returns boolean - true if role is owner or admin
  */
 export function isAdminRole(role: Role): boolean {
-  return role === "admin";
+  return role === "owner" || role === "admin";
 }
 
 /**
