@@ -396,3 +396,30 @@ export const insertListShareSchema = createInsertSchema(listShares).omit({
 
 export type InsertListShare = z.infer<typeof insertListShareSchema>;
 export type ListShare = typeof listShares.$inferSelect;
+
+// Report Types
+export type BehaviorLogCategoryStats = {
+  id: string;
+  name: string;
+  color: string | null;
+  count: number;
+  percentage: number;
+};
+
+export type BehaviorLogOverviewStats = {
+  total: number;
+  byCategory: BehaviorLogCategoryStats[];
+};
+
+export type BehaviorLogCategoryReport = {
+  categoryId: string;
+  categoryName: string;
+  categoryColor: string | null;
+  count: number;
+};
+
+export type BehaviorLogClassReport = {
+  classId: string;
+  className: string;
+  count: number;
+};

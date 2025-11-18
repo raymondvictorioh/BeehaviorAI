@@ -47,9 +47,12 @@ import {
   type InsertListItem,
   type ListShare,
   type InsertListShare,
+  type BehaviorLogOverviewStats,
+  type BehaviorLogCategoryReport,
+  type BehaviorLogClassReport,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, ne, sql, inArray, or, like } from "drizzle-orm";
+import { eq, and, ne, sql, inArray, or, like, gte, lte, count, desc } from "drizzle-orm";
 
 export interface DashboardStats {
   totalStudents: number;
@@ -159,6 +162,11 @@ export interface IStorage {
   getListShares(listId: string, userId: string): Promise<ListShare[]>;
   shareList(listId: string, sharedWithUserId: string, userId: string, organizationId: string): Promise<ListShare>;
   unshareList(listId: string, sharedWithUserId: string, userId: string): Promise<void>;
+
+  // Report operations
+  getBehaviorLogOverviewStats(organizationId: string, fromDate?: string, toDate?: string): Promise<BehaviorLogOverviewStats>;
+  getBehaviorLogsByCategory(organizationId: string, fromDate?: string, toDate?: string): Promise<BehaviorLogCategoryReport[]>;
+  getBehaviorLogsByClass(organizationId: string, fromDate?: string, toDate?: string): Promise<BehaviorLogClassReport[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1666,6 +1674,150 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(listShares)
       .where(and(eq(listShares.listId, listId), eq(listShares.sharedWithUserId, sharedWithUserId)));
+  }
+
+  // Report operations
+  async getBehaviorLogOverviewStats(
+    organizationId: string,
+    fromDate?: string,
+    toDate?: string
+  ): Promise<BehaviorLogOverviewStats> {
+    // Build date filter conditions
+    const conditions = [eq(behaviorLogs.organizationId, organizationId)];
+
+    if (fromDate) {
+      const startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
+      conditions.push(gte(behaviorLogs.incidentDate, startDate));
+    }
+
+    if (toDate) {
+      const endDate = new Date(toDate);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(behaviorLogs.incidentDate, endDate));
+    }
+
+    // Get total count
+    const totalResult = await db
+      .select({ count: count() })
+      .from(behaviorLogs)
+      .where(and(...conditions));
+
+    const total = Number(totalResult[0]?.count || 0);
+
+    // Get counts by category
+    const categoryResults = await db
+      .select({
+        id: behaviorLogCategories.id,
+        name: behaviorLogCategories.name,
+        color: behaviorLogCategories.color,
+        count: count(),
+      })
+      .from(behaviorLogs)
+      .leftJoin(behaviorLogCategories, eq(behaviorLogs.categoryId, behaviorLogCategories.id))
+      .where(and(...conditions))
+      .groupBy(behaviorLogCategories.id, behaviorLogCategories.name, behaviorLogCategories.color, behaviorLogCategories.displayOrder)
+      .orderBy(behaviorLogCategories.displayOrder);
+
+    // Calculate percentages
+    const byCategory = categoryResults.map((item) => ({
+      id: item.id || "",
+      name: item.name || "Unknown",
+      color: item.color,
+      count: Number(item.count),
+      percentage: total > 0 ? Math.round((Number(item.count) / total) * 100) : 0,
+    }));
+
+    return {
+      total,
+      byCategory,
+    };
+  }
+
+  async getBehaviorLogsByCategory(
+    organizationId: string,
+    fromDate?: string,
+    toDate?: string
+  ): Promise<BehaviorLogCategoryReport[]> {
+    // Build date filter conditions
+    const conditions = [eq(behaviorLogs.organizationId, organizationId)];
+
+    if (fromDate) {
+      const startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
+      conditions.push(gte(behaviorLogs.incidentDate, startDate));
+    }
+
+    if (toDate) {
+      const endDate = new Date(toDate);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(behaviorLogs.incidentDate, endDate));
+    }
+
+    // Get counts by category
+    const results = await db
+      .select({
+        categoryId: behaviorLogCategories.id,
+        categoryName: behaviorLogCategories.name,
+        categoryColor: behaviorLogCategories.color,
+        count: count(),
+      })
+      .from(behaviorLogs)
+      .leftJoin(behaviorLogCategories, eq(behaviorLogs.categoryId, behaviorLogCategories.id))
+      .where(and(...conditions))
+      .groupBy(behaviorLogCategories.id, behaviorLogCategories.name, behaviorLogCategories.color, behaviorLogCategories.displayOrder)
+      .orderBy(behaviorLogCategories.displayOrder);
+
+    return results.map((item) => ({
+      categoryId: item.categoryId || "",
+      categoryName: item.categoryName || "Unknown",
+      categoryColor: item.categoryColor,
+      count: Number(item.count),
+    }));
+  }
+
+  async getBehaviorLogsByClass(
+    organizationId: string,
+    fromDate?: string,
+    toDate?: string
+  ): Promise<BehaviorLogClassReport[]> {
+    // Build date filter conditions
+    const conditions = [eq(behaviorLogs.organizationId, organizationId)];
+
+    if (fromDate) {
+      const startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
+      conditions.push(gte(behaviorLogs.incidentDate, startDate));
+    }
+
+    if (toDate) {
+      const endDate = new Date(toDate);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(behaviorLogs.incidentDate, endDate));
+    }
+
+    // Get counts by class (through students)
+    const results = await db
+      .select({
+        classId: classes.id,
+        className: classes.name,
+        count: count(),
+      })
+      .from(behaviorLogs)
+      .leftJoin(students, eq(behaviorLogs.studentId, students.id))
+      .leftJoin(classes, eq(students.classId, classes.id))
+      .where(and(...conditions))
+      .groupBy(classes.id, classes.name)
+      .orderBy(desc(count()));
+
+    // Filter out null classes and return
+    return results
+      .filter((item) => item.classId && item.className)
+      .map((item) => ({
+        classId: item.classId!,
+        className: item.className!,
+        count: Number(item.count),
+      }));
   }
 }
 

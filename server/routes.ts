@@ -563,6 +563,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Report routes
+  app.get("/api/organizations/:orgId/reports/behavior-logs/overview", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const { fromDate, toDate } = req.query;
+
+      const stats = await storage.getBehaviorLogOverviewStats(
+        orgId,
+        fromDate as string | undefined,
+        toDate as string | undefined
+      );
+
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching behavior log overview stats:", error);
+      res.status(500).json({ message: "Failed to fetch behavior log overview stats" });
+    }
+  });
+
+  app.get("/api/organizations/:orgId/reports/behavior-logs/by-category", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const { fromDate, toDate } = req.query;
+
+      const categoryReport = await storage.getBehaviorLogsByCategory(
+        orgId,
+        fromDate as string | undefined,
+        toDate as string | undefined
+      );
+
+      res.json(categoryReport);
+    } catch (error) {
+      console.error("Error fetching behavior logs by category:", error);
+      res.status(500).json({ message: "Failed to fetch behavior logs by category" });
+    }
+  });
+
+  app.get("/api/organizations/:orgId/reports/behavior-logs/by-class", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
+    try {
+      const { orgId } = req.params;
+      const { fromDate, toDate } = req.query;
+
+      const classReport = await storage.getBehaviorLogsByClass(
+        orgId,
+        fromDate as string | undefined,
+        toDate as string | undefined
+      );
+
+      res.json(classReport);
+    } catch (error) {
+      console.error("Error fetching behavior logs by class:", error);
+      res.status(500).json({ message: "Failed to fetch behavior logs by class" });
+    }
+  });
+
   // Meeting notes routes
   app.get("/api/organizations/:orgId/students/:studentId/meeting-notes", isAuthenticated, checkOrganizationAccess, async (req: any, res) => {
     try {

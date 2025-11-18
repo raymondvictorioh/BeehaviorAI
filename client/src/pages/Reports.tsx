@@ -1,89 +1,115 @@
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { startOfMonth } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { TrendingUp, Calendar as CalendarIcon, Users, BookOpen } from "lucide-react";
 import { DateFilterDropdown, type DateFilterOption } from "@/components/reports/DateFilterDropdown";
-import { mockBehaviorLogs, mockCategories, mockClasses, type BehaviorLogWithJoins } from "@/components/reports/mockData";
+import { useAuth } from "@/hooks/useAuth";
+import type { BehaviorLogOverviewStats, BehaviorLogCategoryReport, BehaviorLogClassReport } from "@shared/schema";
 
 export default function Reports() {
+  const { user } = useAuth();
+  const orgId = user?.currentOrganizationId;
+
+  // Debug logging
+  console.log("[Reports] user:", user);
+  console.log("[Reports] orgId:", orgId);
+
   const [dateFilter, setDateFilter] = useState<DateFilterOption>("month-to-date");
   const [fromDate, setFromDate] = useState<Date | undefined>(startOfMonth(new Date()));
   const [toDate, setToDate] = useState<Date | undefined>(new Date());
 
-  // Use mock data for easy visualization
-  const behaviorLogs = mockBehaviorLogs;
-  const categories = mockCategories;
-  const classes = mockClasses;
+  // Format dates to YYYY-MM-DD for API
+  const formatDateForAPI = (date: Date | undefined): string | undefined => {
+    if (!date) return undefined;
+    return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD
+  };
 
-  // Filter logs by date range
-  const filteredLogs = useMemo(() => {
-    return behaviorLogs.filter((log) => {
-      const incidentDate = new Date(log.incidentDate);
+  const fromDateParam = formatDateForAPI(fromDate);
+  const toDateParam = formatDateForAPI(toDate);
 
-      if (fromDate && incidentDate < fromDate) return false;
+  // Debug logging for date params
+  console.log("[Reports] fromDateParam:", fromDateParam);
+  console.log("[Reports] toDateParam:", toDateParam);
+  console.log("[Reports] Query enabled:", !!orgId);
 
-      if (toDate) {
-        const endOfDay = new Date(toDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        if (incidentDate > endOfDay) return false;
+  // Fetch overview stats
+  const { data: overviewStats, isLoading: isLoadingOverview, error: overviewError } = useQuery<BehaviorLogOverviewStats>({
+    queryKey: ["/api/organizations", orgId, "reports", "behavior-logs", "overview", fromDateParam, toDateParam],
+    queryFn: async () => {
+      console.log("[Reports] Fetching overview stats...");
+      const params = new URLSearchParams();
+      if (fromDateParam) params.set("fromDate", fromDateParam);
+      if (toDateParam) params.set("toDate", toDateParam);
+
+      const url = `/api/organizations/${orgId}/reports/behavior-logs/overview?${params.toString()}`;
+      console.log("[Reports] Overview URL:", url);
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error("[Reports] Overview fetch failed:", res.status, res.statusText);
+        throw new Error("Failed to fetch overview stats");
       }
+      const data = await res.json();
+      console.log("[Reports] Overview data:", data);
+      return data;
+    },
+    enabled: !!orgId,
+  });
 
-      return true;
-    });
-  }, [behaviorLogs, fromDate, toDate]);
+  // Debug query state
+  console.log("[Reports] Overview loading:", isLoadingOverview);
+  console.log("[Reports] Overview error:", overviewError);
+  console.log("[Reports] Overview data:", overviewStats);
 
-  // Calculate overview stats
-  const overviewStats = useMemo(() => {
-    const total = filteredLogs.length;
-    const byCategory = categories.map((category) => {
-      const count = filteredLogs.filter((log) => log.categoryId === category.id).length;
-      const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
-      return {
-        ...category,
-        count,
-        percentage,
-      };
-    });
+  // Fetch category report
+  const { data: categoryReport, isLoading: isLoadingCategory } = useQuery<BehaviorLogCategoryReport[]>({
+    queryKey: ["/api/organizations", orgId, "reports", "behavior-logs", "by-category", fromDateParam, toDateParam],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (fromDateParam) params.set("fromDate", fromDateParam);
+      if (toDateParam) params.set("toDate", toDateParam);
 
-    return {
-      total,
-      byCategory: byCategory.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)),
-    };
-  }, [filteredLogs, categories]);
+      const res = await fetch(`/api/organizations/${orgId}/reports/behavior-logs/by-category?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch category report");
+      return res.json();
+    },
+    enabled: !!orgId,
+  });
+
+  // Fetch class report
+  const { data: classReport, isLoading: isLoadingClass } = useQuery<BehaviorLogClassReport[]>({
+    queryKey: ["/api/organizations", orgId, "reports", "behavior-logs", "by-class", fromDateParam, toDateParam],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (fromDateParam) params.set("fromDate", fromDateParam);
+      if (toDateParam) params.set("toDate", toDateParam);
+
+      const res = await fetch(`/api/organizations/${orgId}/reports/behavior-logs/by-class?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch class report");
+      return res.json();
+    },
+    enabled: !!orgId,
+  });
 
   // Prepare category chart data
   const categoryChartData = useMemo(() => {
-    return overviewStats.byCategory.map((cat) => ({
-      name: cat.name,
+    if (!categoryReport) return [];
+    return categoryReport.map((cat) => ({
+      name: cat.categoryName,
       count: cat.count,
-      color: cat.color || "blue",
+      color: cat.categoryColor || "blue",
     }));
-  }, [overviewStats]);
+  }, [categoryReport]);
 
   // Prepare class chart data
   const classChartData = useMemo(() => {
-    const classMap = new Map<string, { name: string; count: number }>();
-
-    // Initialize all classes with 0 count
-    classes.forEach((cls) => {
-      classMap.set(cls.id, { name: cls.name, count: 0 });
-    });
-
-    // Count logs per class
-    filteredLogs.forEach((log) => {
-      if (log.student?.classId) {
-        const existing = classMap.get(log.student.classId);
-        if (existing) {
-          existing.count += 1;
-        }
-      }
-    });
-
-    return Array.from(classMap.values())
-      .filter((item) => item.count > 0) // Only show classes with logs
-      .sort((a, b) => b.count - a.count); // Sort by count descending
-  }, [filteredLogs, classes]);
+    if (!classReport) return [];
+    return classReport.map((cls) => ({
+      name: cls.className,
+      count: cls.count,
+    }));
+  }, [classReport]);
 
   // Color mapping for categories
   const getCategoryColor = (color: string | null) => {
@@ -93,9 +119,15 @@ export default function Reports() {
       amber: "hsl(var(--chart-3))",
       red: "hsl(var(--chart-4))",
       purple: "hsl(var(--chart-5))",
+      pink: "hsl(var(--chart-1))",
+      orange: "hsl(var(--chart-3))",
+      teal: "hsl(var(--chart-2))",
+      indigo: "hsl(var(--chart-5))",
     };
     return color ? colorMap[color] || "hsl(var(--chart-2))" : "hsl(var(--chart-2))";
   };
+
+  const isLoading = isLoadingOverview || isLoadingCategory || isLoadingClass;
 
   return (
     <div className="p-6 space-y-6">
@@ -127,33 +159,43 @@ export default function Reports() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Total Count */}
-              <div className="p-4 bg-muted rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-muted-foreground">Total Logs</span>
-                </div>
-                <p className="text-3xl font-bold">{overviewStats.total}</p>
+            {isLoading ? (
+              <div className="h-[140px] flex items-center justify-center text-muted-foreground">
+                Loading...
               </div>
-
-              {/* Category breakdown */}
-              {overviewStats.byCategory.map((cat) => (
-                <div key={cat.id} className="p-4 bg-muted rounded-lg">
+            ) : overviewStats ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Total Count */}
+                <div className="p-4 bg-muted rounded-lg">
                   <div className="flex items-center gap-2 mb-1">
-                    <div
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: getCategoryColor(cat.color) }}
-                    />
-                    <span className="text-sm font-medium text-muted-foreground">{cat.name}</span>
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-muted-foreground">Total Logs</span>
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-bold">{cat.count}</p>
-                    <span className="text-sm text-muted-foreground">({cat.percentage}%)</span>
-                  </div>
+                  <p className="text-3xl font-bold">{overviewStats.total}</p>
                 </div>
-              ))}
-            </div>
+
+                {/* Category breakdown */}
+                {overviewStats.byCategory.map((cat) => (
+                  <div key={cat.id} className="p-4 bg-muted rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: getCategoryColor(cat.color) }}
+                      />
+                      <span className="text-sm font-medium text-muted-foreground">{cat.name}</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-3xl font-bold">{cat.count}</p>
+                      <span className="text-sm text-muted-foreground">({cat.percentage}%)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-[140px] flex items-center justify-center text-muted-foreground">
+                No data available
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -166,7 +208,11 @@ export default function Reports() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {categoryChartData.length > 0 ? (
+            {isLoading ? (
+              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                Loading...
+              </div>
+            ) : categoryChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart
                   data={categoryChartData}
@@ -212,7 +258,11 @@ export default function Reports() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {classChartData.length > 0 ? (
+            {isLoading ? (
+              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                Loading...
+              </div>
+            ) : classChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart
                   data={classChartData}
