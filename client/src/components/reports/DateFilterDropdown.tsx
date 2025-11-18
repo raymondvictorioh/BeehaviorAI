@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { format, subDays, subMonths, startOfMonth, startOfYear, startOfQuarter } from "date-fns";
+import type { DateRange } from "react-day-picker";
 import {
   Popover,
   PopoverContent,
@@ -50,8 +51,18 @@ export function DateFilterDropdown({
   onToDateChange,
 }: DateFilterDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [tempFromDate, setTempFromDate] = useState<Date | undefined>(fromDate);
-  const [tempToDate, setTempToDate] = useState<Date | undefined>(toDate);
+  const [tempDateRange, setTempDateRange] = useState<DateRange | undefined>({
+    from: fromDate,
+    to: toDate,
+  });
+
+  // Sync temp dates when popover opens or when fromDate/toDate change
+  const handleOpenChange = (open: boolean) => {
+    if (open) {
+      setTempDateRange({ from: fromDate, to: toDate });
+    }
+    setIsOpen(open);
+  };
 
   const getDisplayText = () => {
     if (!fromDate || !toDate) return "Select date range";
@@ -99,25 +110,27 @@ export function DateFilterDropdown({
         return;
     }
 
+    console.log(`[DateFilterDropdown] Preset clicked: ${preset}, from:`, from, "to:", to);
+
     onValueChange(preset);
     onFromDateChange?.(from);
     onToDateChange?.(to);
-    setTempFromDate(from);
-    setTempToDate(to);
+    setTempDateRange({ from, to });
+    setIsOpen(false); // Close popover after selecting preset
   };
 
   const handleApply = () => {
-    if (tempFromDate && tempToDate) {
+    console.log("[DateFilterDropdown] Apply clicked, tempDateRange:", tempDateRange);
+    if (tempDateRange?.from && tempDateRange?.to) {
       onValueChange("custom");
-      onFromDateChange?.(tempFromDate);
-      onToDateChange?.(tempToDate);
+      onFromDateChange?.(tempDateRange.from);
+      onToDateChange?.(tempDateRange.to);
     }
     setIsOpen(false);
   };
 
   const handleClear = () => {
-    setTempFromDate(undefined);
-    setTempToDate(undefined);
+    setTempDateRange({ from: undefined, to: undefined });
     onFromDateChange?.(undefined);
     onToDateChange?.(undefined);
     onValueChange("month-to-date");
@@ -125,7 +138,7 @@ export function DateFilterDropdown({
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -158,45 +171,33 @@ export function DateFilterDropdown({
             </div>
           </div>
 
-          {/* Right side with calendar and inputs */}
+          {/* Right side with calendar */}
           <div className="p-4">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground">Start</label>
-                <div className="border rounded-md px-3 py-1 text-sm">
-                  {tempFromDate ? format(tempFromDate, "MM/dd/yyyy") : "Select"}
-                </div>
+            {/* Date Range Display */}
+            {tempDateRange?.from && tempDateRange?.to && (
+              <div className="flex items-center gap-2 mb-4 text-sm">
+                <span className="text-muted-foreground">Selected:</span>
+                <span className="font-medium">
+                  {format(tempDateRange.from, "MMM d, yyyy")} - {format(tempDateRange.to, "MMM d, yyyy")}
+                </span>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground">End</label>
-                <div className="border rounded-md px-3 py-1 text-sm">
-                  {tempToDate ? format(tempToDate, "MM/dd/yyyy") : "Select"}
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* Date Range Calendar */}
-            <div className="flex gap-4">
-              <Calendar
-                mode="single"
-                selected={tempFromDate}
-                onSelect={setTempFromDate}
-                initialFocus
-              />
-              <Calendar
-                mode="single"
-                selected={tempToDate}
-                onSelect={setTempToDate}
-                disabled={(date) => tempFromDate ? date < tempFromDate : false}
-              />
-            </div>
+            <Calendar
+              mode="range"
+              selected={tempDateRange}
+              onSelect={setTempDateRange}
+              numberOfMonths={2}
+              initialFocus
+            />
 
             {/* Action buttons */}
             <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
               <Button variant="outline" onClick={handleClear} size="sm">
                 Clear
               </Button>
-              <Button onClick={handleApply} size="sm">
+              <Button onClick={handleApply} size="sm" disabled={!tempDateRange?.from || !tempDateRange?.to}>
                 Apply
               </Button>
             </div>

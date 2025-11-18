@@ -1,4 +1,4 @@
-import { GraduationCap, Home, Users, FileText, Settings, Moon, Sun, ClipboardList, BookOpen, List, CheckSquare } from "lucide-react";
+import { GraduationCap, Home, Users, Settings, Moon, Sun, ClipboardList, BookOpen, List, CheckSquare, Lightbulb } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -44,9 +44,9 @@ const menuItems = [
     icon: List,
   },
   {
-    title: "Reports",
-    url: "/reports",
-    icon: FileText,
+    title: "Insights",
+    url: "/insights",
+    icon: Lightbulb,
   },
   {
     title: "Tasks",
@@ -103,6 +103,53 @@ export function AppSidebar() {
       // Prefetch lists
       queryClient.prefetchQuery({
         queryKey: ["/api/organizations", orgId, "lists"],
+      });
+    } else if (url === "/insights") {
+      // Prefetch insights data
+      const today = new Date();
+      const fromDate = new Date(today.getFullYear(), today.getMonth(), 1); // Start of current month
+      const fromDateParam = fromDate.toISOString().split('T')[0];
+      const toDateParam = today.toISOString().split('T')[0];
+
+      // Prefetch with custom queryFn to use query parameters instead of path parameters
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "reports", "behavior-logs", "overview", fromDateParam, toDateParam],
+        queryFn: async () => {
+          const params = new URLSearchParams();
+          params.set("fromDate", fromDateParam);
+          params.set("toDate", toDateParam);
+          const res = await fetch(`/api/organizations/${orgId}/reports/behavior-logs/overview?${params.toString()}`, {
+            credentials: "include",
+          });
+          if (!res.ok) throw new Error("Failed to fetch overview stats");
+          return res.json();
+        },
+      });
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "reports", "behavior-logs", "by-category", fromDateParam, toDateParam],
+        queryFn: async () => {
+          const params = new URLSearchParams();
+          params.set("fromDate", fromDateParam);
+          params.set("toDate", toDateParam);
+          const res = await fetch(`/api/organizations/${orgId}/reports/behavior-logs/by-category?${params.toString()}`, {
+            credentials: "include",
+          });
+          if (!res.ok) throw new Error("Failed to fetch category report");
+          return res.json();
+        },
+      });
+      queryClient.prefetchQuery({
+        queryKey: ["/api/organizations", orgId, "reports", "behavior-logs", "by-class", fromDateParam, toDateParam],
+        queryFn: async () => {
+          const params = new URLSearchParams();
+          params.set("fromDate", fromDateParam);
+          params.set("toDate", toDateParam);
+          const res = await fetch(`/api/organizations/${orgId}/reports/behavior-logs/by-class?${params.toString()}`, {
+            credentials: "include",
+          });
+          if (!res.ok) throw new Error("Failed to fetch class report");
+          return res.json();
+        },
       });
     }
   };

@@ -2,19 +2,17 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { startOfMonth } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { TrendingUp, Calendar as CalendarIcon, Users, BookOpen } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
+import { Lightbulb, TrendingUp, Users, BookOpen } from "lucide-react";
 import { DateFilterDropdown, type DateFilterOption } from "@/components/reports/DateFilterDropdown";
 import { useAuth } from "@/hooks/useAuth";
 import type { BehaviorLogOverviewStats, BehaviorLogCategoryReport, BehaviorLogClassReport } from "@shared/schema";
 
-export default function Reports() {
+export default function Insights() {
   const { user } = useAuth();
   const orgId = user?.organizations?.[0]?.id;
 
-  // Debug logging
-  console.log("[Reports] user:", user);
-  console.log("[Reports] orgId:", orgId);
+  console.log("[Insights] Component rendered, orgId:", orgId);
 
   const [dateFilter, setDateFilter] = useState<DateFilterOption>("month-to-date");
   const [fromDate, setFromDate] = useState<Date | undefined>(startOfMonth(new Date()));
@@ -23,44 +21,34 @@ export default function Reports() {
   // Format dates to YYYY-MM-DD for API
   const formatDateForAPI = (date: Date | undefined): string | undefined => {
     if (!date) return undefined;
-    return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD
+    return date.toISOString().split('T')[0];
   };
 
   const fromDateParam = formatDateForAPI(fromDate);
   const toDateParam = formatDateForAPI(toDate);
 
-  // Debug logging for date params
-  console.log("[Reports] fromDateParam:", fromDateParam);
-  console.log("[Reports] toDateParam:", toDateParam);
-  console.log("[Reports] Query enabled:", !!orgId);
-
   // Fetch overview stats
-  const { data: overviewStats, isLoading: isLoadingOverview, error: overviewError } = useQuery<BehaviorLogOverviewStats>({
+  const { data: overviewStats, isLoading: isLoadingOverview } = useQuery<BehaviorLogOverviewStats>({
     queryKey: ["/api/organizations", orgId, "reports", "behavior-logs", "overview", fromDateParam, toDateParam],
     queryFn: async () => {
-      console.log("[Reports] Fetching overview stats...");
+      console.log("[Insights] Fetching overview stats...");
       const params = new URLSearchParams();
       if (fromDateParam) params.set("fromDate", fromDateParam);
       if (toDateParam) params.set("toDate", toDateParam);
 
       const url = `/api/organizations/${orgId}/reports/behavior-logs/overview?${params.toString()}`;
-      console.log("[Reports] Overview URL:", url);
+      console.log("[Insights] Overview URL:", url);
       const res = await fetch(url);
       if (!res.ok) {
-        console.error("[Reports] Overview fetch failed:", res.status, res.statusText);
+        console.error("[Insights] Overview fetch failed:", res.status, res.statusText);
         throw new Error("Failed to fetch overview stats");
       }
       const data = await res.json();
-      console.log("[Reports] Overview data:", data);
+      console.log("[Insights] Overview data:", data);
       return data;
     },
     enabled: !!orgId,
   });
-
-  // Debug query state
-  console.log("[Reports] Overview loading:", isLoadingOverview);
-  console.log("[Reports] Overview error:", overviewError);
-  console.log("[Reports] Overview data:", overviewStats);
 
   // Fetch category report
   const { data: categoryReport, isLoading: isLoadingCategory } = useQuery<BehaviorLogCategoryReport[]>({
@@ -92,26 +80,7 @@ export default function Reports() {
     enabled: !!orgId,
   });
 
-  // Prepare category chart data
-  const categoryChartData = useMemo(() => {
-    if (!categoryReport) return [];
-    return categoryReport.map((cat) => ({
-      name: cat.categoryName,
-      count: cat.count,
-      color: cat.categoryColor || "blue",
-    }));
-  }, [categoryReport]);
-
-  // Prepare class chart data
-  const classChartData = useMemo(() => {
-    if (!classReport) return [];
-    return classReport.map((cls) => ({
-      name: cls.className,
-      count: cls.count,
-    }));
-  }, [classReport]);
-
-  // Color mapping for categories
+  // Color mapping for categories (moved before useMemo hooks that use it)
   const getCategoryColor = (color: string | null) => {
     const colorMap: Record<string, string> = {
       green: "hsl(var(--chart-1))",
@@ -127,6 +96,36 @@ export default function Reports() {
     return color ? colorMap[color] || "hsl(var(--chart-2))" : "hsl(var(--chart-2))";
   };
 
+  // Prepare category chart data for horizontal bar chart
+  const categoryBarData = useMemo(() => {
+    if (!categoryReport) return [];
+    return categoryReport.map((cat) => ({
+      name: cat.categoryName,
+      count: cat.count,
+      color: cat.categoryColor || "blue",
+    }));
+  }, [categoryReport]);
+
+  // Prepare category pie chart data
+  const categoryPieData = useMemo(() => {
+    if (!categoryReport) return [];
+    return categoryReport.map((cat) => ({
+      name: cat.categoryName,
+      value: cat.count,
+      color: getCategoryColor(cat.categoryColor),
+      fill: getCategoryColor(cat.categoryColor),
+    }));
+  }, [categoryReport]);
+
+  // Prepare class chart data
+  const classChartData = useMemo(() => {
+    if (!classReport) return [];
+    return classReport.map((cls) => ({
+      name: cls.className,
+      count: cls.count,
+    }));
+  }, [classReport]);
+
   const isLoading = isLoadingOverview || isLoadingCategory || isLoadingClass;
 
   return (
@@ -134,9 +133,9 @@ export default function Reports() {
       {/* Header with title and filter in same row */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Insights</h1>
           <p className="text-muted-foreground">
-            View organization-wide behavior analytics and insights
+            Visualize behavior patterns and trends across your organization
           </p>
         </div>
         <DateFilterDropdown
@@ -155,7 +154,7 @@ export default function Reports() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              Overview - Behavior Logs Summary
+              Behavior Overview
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -168,7 +167,7 @@ export default function Reports() {
                 {/* Total Count */}
                 <div className="p-4 bg-muted rounded-lg">
                   <div className="flex items-center gap-2 mb-1">
-                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                    <Lightbulb className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-muted-foreground">Total Logs</span>
                   </div>
                   <p className="text-3xl font-bold">{overviewStats.total}</p>
@@ -199,62 +198,112 @@ export default function Reports() {
           </CardContent>
         </Card>
 
-        {/* Overview by Category */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              Overview by Category
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                Loading...
-              </div>
-            ) : categoryChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={categoryChartData}
-                  layout="vertical"
-                  margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis type="number" className="text-sm" />
-                  <YAxis
-                    dataKey="name"
-                    type="category"
-                    className="text-sm"
-                    width={90}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "var(--radius)",
-                    }}
-                  />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                    {categoryChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={getCategoryColor(entry.color)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No behavior logs found for the selected date range
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Two column layout for charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Category Breakdown - Horizontal Bar Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                Category Breakdown
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  Loading...
+                </div>
+              ) : categoryBarData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={categoryBarData}
+                    layout="vertical"
+                    margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis type="number" className="text-sm" />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      className="text-sm"
+                      width={90}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "var(--radius)",
+                      }}
+                    />
+                    <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                      {categoryBarData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={getCategoryColor(entry.color)} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  No behavior logs found for the selected date range
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Overview by Class */}
+          {/* Category Distribution - Pie Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Category Distribution
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  Loading...
+                </div>
+              ) : categoryPieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={categoryPieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      dataKey="value"
+                    >
+                      {categoryPieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "var(--radius)",
+                      }}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  No behavior logs found for the selected date range
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Class Distribution - Full Width */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              Overview by Class
+              Class Distribution
             </CardTitle>
           </CardHeader>
           <CardContent>
